@@ -1,0 +1,160 @@
+Item Code,Item Name,Category,Rate
+Soup,,,
+1,Tomato Soup,Soup,90
+2,Veg. Manchow Soup,Soup,100
+3,Hot & Sour Soup,Soup,110
+4,Veg. Sweet Corn Soup,Soup,120
+5,Lemon Coriander Soup,Soup,100
+6,Manchurian Soup,Soup,90
+Chinese Item,,,
+7,Paneer Chilli Dry,Chinese Item,150
+8,Mushroom Chilli Dry,Chinese Item,140
+9,Manchurian Dry,Chinese Item,120
+10,Manchurian Gravy,Chinese Item,120
+11,Veg. Hakka Noodles,Chinese Item,120
+12,Veg. Singapuri Noodles,Chinese Item,130
+13,Manchurian Noodles,Chinese Item,130
+14,Schezwan Noodles,Chinese Item,130
+15,Veg. Crispy,Chinese Item,150
+16,Chinese Bhel,Chinese Item,130
+17,Finger Chips,Chinese Item,80
+18,Dragon Potato,Chinese Item,130
+19,Paneer Fried Rice,Chinese Item,130
+Sizzler,,,
+20,Aashirwad Special Sizzler,Sizzler,250
+21,Mix Grill Sizzler,Sizzler,200
+22,Chinese Sizzler,Sizzler,220
+23,Veg. Classic Sizzler,Sizzler,200
+Papad - Salad,,,
+24,Fry Papad,Papad - Salad,20
+25,Roasted Papad,Papad - Salad,15
+26,Masala Papad,Papad - Salad,35
+27,Roasted Masala Papad,Papad - Salad,25
+28,Cheese Masala Papad,Papad - Salad,50
+29,Peri Peri Fries,Papad - Salad,120
+30,Green Salad,Papad - Salad,50
+31,Greek Salad,Papad - Salad,60
+32,City Salad,Papad - Salad,40
+33,Tomato Salad,Papad - Salad,30
+34,Mix Salad,Papad - Salad,45
+35,Kachumber Salad,Papad - Salad,30
+36,Russian Salad,Papad - Salad,80
+Cheese & Kaju Item,,,
+37,Cheese Butter Masala,Cheese & Kaju Item,150
+38,Cheese Masala,Cheese & Kaju Item,130
+39,Cheese Masala Kofta,Cheese & Kaju Item,150
+40,Cheese Anguri,Cheese & Kaju Item,170
+41,Kaju Butter Masala,Cheese & Kaju Item,160
+42,Kaju Paneer Masala,Cheese & Kaju Item,170
+43,Kaju Kolhapuri ,Cheese & Kaju Item,160
+44,Kaju Cheese Butter Masala,Cheese & Kaju Item,180
+45,Kaju Curry,Cheese & Kaju Item,160
+46,Kaju Masala,Cheese & Kaju Item,160
+Paneer Sabji,,,
+47,Aashirwad Special Paneer ,Paneer Sabji,180
+48,Paneer Tikka Masala,Paneer Sabji,130
+49,Paneer Butter Masala,Paneer Sabji,130
+50,Paneer Kolhapuri,Paneer Sabji,120
+51,Paneer Chilli Milli,Paneer Sabji,120
+52,Paneer Kofta,Paneer Sabji,140
+53,Paneer Pasanda ,Paneer Sabji,150
+54,Paneer Lajawab,Paneer Sabji,150
+55,Paneer Makhanwala,Paneer Sabji,130
+56,Paneer Palak,Paneer Sabji,130
+57,Hyderabadi Paneer,Paneer Sabji,145
+58,Handi Paneer,Paneer Sabji,130
+59,Kadai Paneer,Paneer Sabji,130
+60,Mughlai Paneer,Paneer Sabji,140
+61,Shahi Paneer,Paneer Sabji,130
+62,Paneer Begum Bahar,Paneer Sabji,150
+63,Paneer Angara,Paneer Sabji,150
+64,Paneer Tufani ,Paneer Sabji,150
+65,Paneer Tiranga,Paneer Sabji,170
+66,Paneer Tawa,Paneer Sabji,140
+67,Paneer Patiala,Paneer Sabji,130
+68,Lasuni Paneer Tikka,Paneer Sabji,120
+Sweet Sabji,,,
+69,Sweet Kaju Khoya,Sweet Sabji,150
+70,Navratna Korma,Sweet Sabji,140
+71,Malai Kofta ,Sweet Sabji,130
+Veg. Sabji,,,
+72,Veg. Handi,Veg. Sabji,120
+73,Veg. Tufani,Veg. Sabji,150
+74,Veg. Kadai,Veg. Sabji,120
+75,Veg. Makhanwala,Veg. Sabji,130
+76,Veg. Kolhapuri ,Veg. Sabji,130
+77,Veg. Chilli Milli,Veg. Sabji,140
+78,Veg. Mughlai,Veg. Sabji,140
+79,Veg. Jaipuri ,Veg. Sabji,130
+80,Mix Veg.,Veg. Sabji,130
+81,Veg. Navratna Korma,Veg. Sabji,130
+82,Veg. Tawa,Veg. Sabji,130
+83,Veg. Keema Masala,Veg. Sabji,120
+Tandoor Item,,,
+84,Butter Tandoor Roti,Tandoor Item,20
+85,Butter Tawa Roti,Tandoor Item,15
+86,Butter Naan,Tandoor Item,40
+87,Cheese Garlic,Tandoor Item,90
+88,Cheese Naan,Tandoor Item,70
+89,Garlic Naan,Tandoor Item,60
+90,Butter Kulcha,Tandoor Item,40
+91,Stuff Kulcha,Tandoor Item,60
+92,Tawa Paratha,Tandoor Item,25
+93,Butter Paratha,Tandoor Item,30
+94,Butter Laccha Paratha,Tandoor Item,60
+95,Paneer Paratha,Tandoor Item,70
+96,Aloo Paratha,Tandoor Item,50
+97,Harabhara Kabab,Tandoor Item,120
+98,C. Kabab,Tandoor Item,150
+99,Hariyali Tikka Dry,Tandoor Item,200
+100,Aachari Paneer Tikka Dry,Tandoor Item,220
+101,Mushroom Tikka Dry,Tandoor Item,230
+Dal Item,,,
+102,Dal Fry,Dal Item,90
+103,Dal Tadka,Dal Item,100
+104,Dal Kolhapuri ,Dal Item,120
+105,Dal Palak,Dal Item,100
+106,Dal Makhani,Dal Item,120
+Rice Item ,,,
+107,Jeera Rice,Rice Item ,70
+108,Veg. Biryani,Rice Item ,100
+109,Veg. Pulav,Rice Item ,90
+110,Kashmiri Pulav,Rice Item ,120
+111,Paneer Biryani,Rice Item ,120
+112,Handi Biryani,Rice Item ,130
+113,Veg. Dum Biryani,Rice Item ,140
+114,Hyderabadi Biryani,Rice Item ,130
+115,Palak Rice,Rice Item ,110
+116,Kaju Pulav,Rice Item ,130
+117,Steam Rice ,Rice Item ,60
+118,Veg. Fried Rice,Rice Item ,110
+119,Manchurian Fried Rice,Rice Item ,130
+120,Chilli Garlic Rice,Rice Item ,120
+121,Paneer Fried Rice,Rice Item ,150
+122,Schezwan Fried Rice,Rice Item ,130
+123,Veg. Singapuri Rice,Rice Item ,120
+South Indian Item,,,
+124,Aashirwad Special Dosa,South Indian Item,200
+125,Plain Paper Dosa,South Indian Item,70
+126,Cheese Plain Paper Dosa,South Indian Item,90
+127,Masala Dosa,South Indian Item,100
+128,Butter Masala Dosa,South Indian Item,120
+129,Rawa Masala Dosa,South Indian Item,150
+130,Jini Roll Dosa,South Indian Item,170
+131,Spring Roll Dosa,South Indian Item,150
+132,Paneer Masala Dosa,South Indian Item,170
+133,Chinese Dosa ,South Indian Item,160
+134,Mix Masala Uttapam,South Indian Item,100
+135,Plain Uttapam ,South Indian Item,60
+136,Tomato Uttapam,South Indian Item,80
+137,Onion Uttapam,South Indian Item,80
+138,Mix Uttapam ,South Indian Item,100
+Cold Drinks,,,
+140,Cold Drink,Cold Drinks,20
+141,Regular Lassi ,Cold Drinks,70
+142,Sweet Lassi,Cold Drinks,80
+143,Mango Lassi ,Cold Drinks,90
+144,Dry Fruit Lassi,Cold Drinks,130
+145,Aashirwad Special Lassi,Cold Drinks,150
+146,Butter Milk ,Cold Drinks,15
+147,Curd,Cold Drinks,30

@@ -1,0 +1,223 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { MenuCard } from '@/components/waiter/menu-card';
+import { TableSelector } from '@/components/waiter/table-selector';
+import { OrderSummary, CartItem } from '@/components/waiter/order-summary';
+import { LogOut, Loader2, User, Mail, Lock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+export default function WaiterPage() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [menu, setMenu] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [tables, setTables] = useState<any[]>([]);
+  
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    const init = async () => {
+      // 1. Get Current User
+      const authRes = await fetch('/api/auth/me');
+      if (authRes.ok) {
+          const user = await authRes.json();
+          setCurrentUser(user);
+      } else {
+          router.push('/');
+      }
+
+      // 2. Get Data
+      const [menuRes, tablesRes] = await Promise.all([
+          fetch('/api/menu'),
+          fetch('/api/tables'),
+      ]);
+
+      const menuData = await menuRes.json();
+      const tablesData = await tablesRes.json();
+      
+      const uniqueCats = Array.from(new Set(menuData.items.map((i: any) => i.category)));
+      setCategories(uniqueCats.map(c => ({ id: c, name: c })));
+
+      setMenu(menuData.items || []);
+      setTables(tablesData.tables || []);
+    };
+    init();
+  }, []);
+
+  const handleTableSelect = (tableId: string) => {
+      const table = tables.find(t => t._id === tableId);
+      if (!table) return;
+
+      // ACCESS CONTROL LOGIC
+      if (table.status === 'occupied' && currentUser) {
+          if (table.currentWaiterId && table.currentWaiterId !== currentUser.userId) {
+              alert(`⛔ Access Denied!\nThis table is served by another waiter.`);
+              return;
+          }
+      }
+
+      setSelectedTableId(tableId);
+  };
+
+  const handleSendOrder = async () => {
+    if (!selectedTableId || cart.size === 0) return;
+    
+    // Only require name for NEW orders (available tables)
+    const table = tables.find(t => t._id === selectedTableId);
+    if (table?.status === 'available' && !customerName) { 
+        alert('Please enter Customer Name'); return; 
+    }
+
+    setIsSending(true);
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableNumber: table.table_number,
+          customerName, 
+          customerEmail,
+          items: Array.from(cart.values())
+        }),
+      });
+
+      const resData = await response.json();
+      if (!response.ok) throw new Error(resData.error || 'Failed');
+
+      setCart(new Map());
+      setSelectedTableId(null);
+      setCustomerName('');
+      setCustomerEmail('');
+      alert(table.status === 'occupied' ? '✅ Order Updated!' : '✅ New Order Sent!');
+      
+      const tRes = await fetch('/api/tables');
+      const tData = await tRes.json();
+      setTables(tData.tables);
+
+    } catch (e: any) { alert(e.message); } 
+    finally { setIsSending(false); }
+  };
+
+  // Helper filters
+  const filteredItems = selectedCategory
+    ? menu.filter((item) => item.category === selectedCategory)
+    : menu;
+
+  const handleAddToCart = (item: any, quantity: number) => {
+    const newCart = new Map(cart);
+    const itemId = item._id || item.id;
+    if (quantity === 0) newCart.delete(itemId);
+    else newCart.set(itemId, { menuItemId: itemId, name: item.name, price: item.price, quantity });
+    setCart(newCart);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <header className="bg-white shadow p-4 flex justify-between sticky top-0 z-20">
+        <div>
+            <h1 className="font-bold text-xl">Waiter POS</h1>
+            <p className="text-xs text-gray-500">Logged in as: {currentUser?.name}</p>
+        </div>
+        <button onClick={() => { document.cookie = 'sessionId=; path=/;'; router.push('/'); }} className="text-red-600 font-bold">Logout</button>
+      </header>
+
+      <div className="max-w-7xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          
+          {/* Customer Input (Only show if table is available or if we want to update) */}
+          <div className="bg-white p-4 rounded-lg shadow-sm border space-y-3">
+             <h3 className="font-bold text-gray-700">Customer Details</h3>
+             <div className="grid grid-cols-2 gap-4">
+                <input 
+                    placeholder="Name" 
+                    className="border rounded px-3 py-2"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                />
+                <input 
+                    placeholder="Email" 
+                    className="border rounded px-3 py-2"
+                    value={customerEmail}
+                    onChange={e => setCustomerEmail(e.target.value)}
+                />
+             </div>
+          </div>
+
+          {/* Table Selector with Lock Icon */}
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Select Table</h2>
+            <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+                {tables.map((table) => {
+                    const isOccupiedByOther = table.status === 'occupied' && currentUser && table.currentWaiterId !== currentUser.userId;
+                    const isOccupiedByMe = table.status === 'occupied' && currentUser && table.currentWaiterId === currentUser.userId;
+                    
+                    return (
+                        <button
+                            key={table._id}
+                            onClick={() => handleTableSelect(table._id)}
+                            className={`p-2 rounded-lg font-bold text-sm min-h-[80px] flex flex-col items-center justify-center relative
+                                ${selectedTableId === table._id ? 'bg-orange-600 text-white shadow-lg scale-105' : 
+                                  isOccupiedByMe ? 'bg-blue-100 text-blue-900 border-2 border-blue-500' :
+                                  isOccupiedByOther ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 
+                                  'bg-green-100 text-green-900 hover:bg-green-200'}
+                            `}
+                        >
+                            <span>{table.name || `T-${table.table_number}`}</span>
+                            {isOccupiedByOther && <Lock size={12} className="mt-1" />}
+                            {isOccupiedByMe && <span className="text-[10px] mt-1">My Order</span>}
+                        </button>
+                    )
+                })}
+            </div>
+          </div>
+
+          {/* Categories */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+             <button onClick={() => setSelectedCategory(null)} className={`px-4 py-2 rounded-full whitespace-nowrap ${!selectedCategory ? 'bg-black text-white' : 'bg-white border'}`}>All</button>
+             {categories.map(c => (
+                 <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategory === c.id ? 'bg-black text-white' : 'bg-white border'}`}>{c.name}</button>
+             ))}
+          </div>
+
+          {/* Menu */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredItems.map(item => (
+                <div key={item._id} className="bg-white rounded-lg shadow overflow-hidden border">
+                    <div className="h-32 bg-gray-200 relative">
+                        {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="p-3">
+                        <div className="flex justify-between items-start">
+                            <h3 className="font-bold text-sm line-clamp-1">{item.name}</h3>
+                            <span className="text-orange-600 font-bold">₹{item.price}</span>
+                        </div>
+                        <button onClick={() => handleAddToCart(item, (cart.get(item._id || item.id)?.quantity || 0) + 1)} className="mt-2 w-full bg-orange-100 text-orange-700 py-1 rounded text-sm font-bold hover:bg-orange-200">
+                            Add +
+                        </button>
+                    </div>
+                </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Order Summary */}
+        <div className="md:sticky md:top-24 h-fit">
+           <OrderSummary 
+                items={Array.from(cart.values())} 
+                selectedTableNumber={tables.find(t => t._id === selectedTableId)?.table_number}
+                onRemoveItem={(id) => { const n = new Map(cart); n.delete(id); setCart(n); }}
+                onSendOrder={handleSendOrder}
+                isLoading={isSending}
+           />
+        </div>
+      </div>
+    </div>
+  );
+}
