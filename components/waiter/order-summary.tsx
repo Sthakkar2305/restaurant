@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2, Send, X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 
 export interface CartItem {
   menuItemId: string;
@@ -15,8 +15,8 @@ interface OrderSummaryProps {
   onRemoveItem: (menuItemId: string) => void;
   onSendOrder: () => Promise<void>;
   isLoading?: boolean;
-  isOpen?: boolean;
-  onClose?: () => void;
+  isOpen?: boolean;      // NEW: Controls mobile visibility
+  onClose?: () => void;  // NEW: Closes mobile cart
 }
 
 export function OrderSummary({
@@ -32,108 +32,33 @@ export function OrderSummary({
   const tax = subtotal * 0.05;
   const serviceCharge = subtotal * 0.1;
   const total = subtotal + tax + serviceCharge;
-
   const isEmpty = items.length === 0;
 
-  return (
-    <>
-      {/* Desktop Version */}
-      <div className="hidden md:block bg-white rounded-lg shadow-md p-4 md:sticky md:top-4">
-        <SummaryContent
-          items={items}
-          subtotal={subtotal}
-          tax={tax}
-          serviceCharge={serviceCharge}
-          total={total}
-          selectedTableNumber={selectedTableNumber}
-          isEmpty={isEmpty}
-          onRemoveItem={onRemoveItem}
-          onSendOrder={onSendOrder}
-          isLoading={isLoading}
-        />
-      </div>
-
-      {/* Mobile Bottom Sheet */}
-      <div
-        className={`fixed inset-0 bg-black/40 z-50 transition-opacity ${
-          isOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
-        } md:hidden`}
-        onClick={onClose}
-      />
-
-      <div
-        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 z-50 transform transition-transform duration-300 md:hidden ${
-          isOpen ? 'translate-y-0' : 'translate-y-full'
-        }`}
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold">Order Summary</h2>
-          <button onClick={onClose}>
-            <X />
-          </button>
-        </div>
-
-        <SummaryContent
-          items={items}
-          subtotal={subtotal}
-          tax={tax}
-          serviceCharge={serviceCharge}
-          total={total}
-          selectedTableNumber={selectedTableNumber}
-          isEmpty={isEmpty}
-          onRemoveItem={onRemoveItem}
-          onSendOrder={onSendOrder}
-          isLoading={isLoading}
-        />
-      </div>
-    </>
-  );
-}
-
-function SummaryContent({
-  items,
-  subtotal,
-  tax,
-  serviceCharge,
-  total,
-  selectedTableNumber,
-  isEmpty,
-  onRemoveItem,
-  onSendOrder,
-  isLoading,
-}: any) {
-  return (
-    <>
-      {selectedTableNumber ? (
-        <div className="bg-orange-50 p-2 mb-3 rounded text-sm font-semibold text-orange-900">
-          Table {selectedTableNumber}
-        </div>
-      ) : (
-        <div className="bg-yellow-50 p-2 mb-3 rounded text-xs text-yellow-900">
-          Select table first
-        </div>
-      )}
-
-      <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
-        {items.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-3">
-            No items selected
-          </p>
+  // Reusable Content for both Desktop and Mobile
+  const CartContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Items List */}
+      <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+        {isEmpty ? (
+          <div className="text-center text-gray-400 py-10">Cart is empty</div>
         ) : (
-          items.map((item: any) => (
-            <div key={item.menuItemId} className="flex justify-between bg-gray-50 p-2 rounded">
+          items.map((item) => (
+            <div key={item.menuItemId} className="flex justify-between items-center bg-gray-50 p-2 rounded">
               <div>
-                <p className="text-sm font-semibold">{item.name}</p>
+                <p className="font-semibold text-sm">{item.name}</p>
                 <p className="text-xs text-gray-600">
-                  {item.quantity} × ₹{item.price.toFixed(2)}
+                  {item.quantity} × ₹{item.price.toFixed(0)}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-orange-600">
-                  ₹{(item.price * item.quantity).toFixed(2)}
+              <div className="flex items-center gap-3">
+                <span className="font-bold text-gray-700">
+                  ₹{(item.price * item.quantity).toFixed(0)}
                 </span>
-                <button onClick={() => onRemoveItem(item.menuItemId)}>
-                  <Trash2 size={16} className="text-red-600" />
+                <button 
+                  onClick={() => onRemoveItem(item.menuItemId)}
+                  className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>
@@ -141,32 +66,73 @@ function SummaryContent({
         )}
       </div>
 
-      <div className="border-t pt-2 text-sm space-y-1 mb-3">
-        <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>₹{subtotal.toFixed(2)}</span>
+      {/* Footer Totals */}
+      <div className="border-t pt-4 mt-auto">
+        <div className="space-y-1 mb-4 text-sm">
+          <div className="flex justify-between text-gray-500">
+            <span>Subtotal</span>
+            <span>₹{subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-gray-500">
+            <span>Tax (5%)</span>
+            <span>₹{tax.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between font-bold text-gray-900 text-lg">
+            <span>Total</span>
+            <span>₹{total.toFixed(0)}</span>
+          </div>
         </div>
-        <div className="flex justify-between">
-          <span>Tax</span>
-          <span>₹{tax.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between font-bold text-lg">
-          <span>Total</span>
-          <span className="text-orange-600">₹{total.toFixed(2)}</span>
-        </div>
+
+        <button
+          onClick={onSendOrder}
+          disabled={isEmpty || !selectedTableNumber || isLoading}
+          className={`w-full py-3.5 rounded-xl font-bold text-white shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 ${
+            isEmpty || !selectedTableNumber || isLoading
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700'
+          }`}
+        >
+          {isLoading ? 'Sending...' : `Send Order • ₹${total.toFixed(0)}`}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* DESKTOP VIEW (Sidebar) */}
+      <div className="hidden md:flex flex-col bg-white rounded-xl shadow-md p-4 h-[calc(100vh-120px)] sticky top-24">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
+          Table {selectedTableNumber ? selectedTableNumber : '-'}
+        </h2>
+        <CartContent />
       </div>
 
-      <button
-        onClick={onSendOrder}
-        disabled={isEmpty || !selectedTableNumber || isLoading}
-        className={`w-full py-3 rounded-lg font-bold text-white ${
-          isEmpty || !selectedTableNumber || isLoading
-            ? 'bg-gray-300'
-            : 'bg-green-600 active:scale-95'
-        }`}
-      >
-        {isLoading ? 'Sending...' : 'Send Order'}
-      </button>
+      {/* MOBILE VIEW (Popup / Modal) */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div 
+            className="w-full h-[85vh] bg-white rounded-t-2xl sm:rounded-2xl p-5 flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile Header */}
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Current Order</h2>
+                <p className="text-sm text-orange-600 font-medium">
+                  {selectedTableNumber ? `Table ${selectedTableNumber}` : 'Select a table'}
+                </p>
+              </div>
+              <button onClick={onClose} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                <X size={24} className="text-gray-600" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <CartContent />
+          </div>
+        </div>
+      )}
     </>
   );
 }

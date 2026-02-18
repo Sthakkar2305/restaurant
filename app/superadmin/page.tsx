@@ -2,207 +2,287 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, TrendingUp, Users, Calendar, LogOut } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Calendar, LogOut, Plus, Trash2, Download, Table as TableIcon } from 'lucide-react';
+import * as XLSX from 'xlsx'; // Import Excel library
 
 interface StatsType {
   waiterSales: Record<string, number>;
   tableSales: Record<string, number>;
   monthlyIncome: number;
+  allOrders: any[]; // Store full data for export
 }
 
 export default function SuperAdminPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'waiters' | 'tables'>('dashboard');
   const [stats, setStats] = useState<StatsType | null>(null);
+  const [waiters, setWaiters] = useState<any[]>([]);
+  const [tables, setTables] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Form States
+  const [newWaiterName, setNewWaiterName] = useState('');
+  const [newWaiterPin, setNewWaiterPin] = useState('');
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableNumber, setNewTableNumber] = useState('');
+
+  const refreshData = async () => {
+      // 1. Fetch Stats
+      const res = await fetch('/api/orders');
+      const data = await res.json();
+      const orders = data.orders || [];
+      const paidOrders = orders.filter((o: any) => o.status === 'paid');
+
+      // Calc Logic
+      const waiterSales: Record<string, number> = {};
+      const tableSales: Record<string, number> = {};
+      let monthlyIncome = 0;
+      const currentMonth = new Date().getMonth();
+
+      paidOrders.forEach((o: any) => {
+          waiterSales[o.waiterName] = (waiterSales[o.waiterName] || 0) + o.total;
+          tableSales[`Table ${o.tableNumber}`] = (tableSales[`Table ${o.tableNumber}`] || 0) + o.total;
+          
+          if (new Date(o.createdAt).getMonth() === currentMonth) {
+              monthlyIncome += o.total;
+          }
+      });
+
+      setStats({ waiterSales, tableSales, monthlyIncome, allOrders: paidOrders });
+
+      // 2. Fetch Waiters
+      const wRes = await fetch('/api/users');
+      const wData = await wRes.json();
+      setWaiters(wData.waiters || []);
+
+      // 3. Fetch Tables
+      const tRes = await fetch('/api/tables');
+      const tData = await tRes.json();
+      setTables(tData.tables || []);
+  };
 
   useEffect(() => {
     const init = async () => {
-      try {
-        // Auth check
         const authRes = await fetch('/api/auth/me');
-        if (!authRes.ok) {
-          router.push('/');
-          return;
-        }
-
-        const user = await authRes.json();
-        if (user.role !== 'superadmin') {
-          router.push('/');
-          return;
-        }
-
-        // Fetch orders
-        const res = await fetch('/api/orders');
-        if (!res.ok) throw new Error('Failed to fetch orders');
-
-        const data = await res.json();
-        const orders = data.orders || [];
-
-        const paidOrders = orders.filter((o: any) => o.status === 'paid');
-
-        // Waiter Sales
-        const waiterSales: Record<string, number> = {};
-        paidOrders.forEach((o: any) => {
-          const name = o.waiterName || 'Unknown';
-          waiterSales[name] = (waiterSales[name] || 0) + o.total;
-        });
-
-        // Table Sales
-        const tableSales: Record<string, number> = {};
-        paidOrders.forEach((o: any) => {
-          const tName = `Table ${o.tableNumber || '-'}`;
-          tableSales[tName] = (tableSales[tName] || 0) + o.total;
-        });
-
-        // Monthly Income
-        const currentMonth = new Date().getMonth();
-        const monthlyIncome = paidOrders.reduce(
-          (sum: number, o: any) => {
-            const orderDate = new Date(o.createdAt);
-            if (orderDate.getMonth() === currentMonth) {
-              return sum + o.total;
+        if (authRes.ok) {
+            const user = await authRes.json();
+            if (user.role !== 'superadmin') router.push('/');
+            else {
+                await refreshData();
+                setIsLoading(false);
             }
-            return sum;
-          },
-          0
-        );
-
-        setStats({ waiterSales, tableSales, monthlyIncome });
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
+        } else {
+            router.push('/');
+        }
     };
-
     init();
-  }, [router]);
+  }, []);
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/');
+  // EXCEL EXPORT
+  const exportToExcel = () => {
+      if (!stats) return;
+      
+      const wb = XLSX.utils.book_new();
+      
+      // Sheet 1: Sales Summary
+      const summaryData = [
+          ['Metric', 'Value'],
+          ['Total Monthly Income', stats.monthlyIncome],
+          ['Total Orders', stats.allOrders.length],
+          [],
+          ['Waiter Name', 'Total Sales'],
+          ...Object.entries(stats.waiterSales),
+      ];
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+
+      // Sheet 2: All Orders
+      const orderData = stats.allOrders.map(o => ({
+          ID: o.orderId,
+          Date: new Date(o.createdAt).toLocaleDateString(),
+          Table: o.tableNumber,
+          Waiter: o.waiterName,
+          Total: o.total
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(orderData);
+      XLSX.utils.book_append_sheet(wb, ws2, "Order Details");
+
+      XLSX.writeFile(wb, "Monthly_Report.xlsx");
   };
 
-  if (isLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-950">
-        <Loader2 className="animate-spin text-orange-500" size={50} />
-      </div>
-    );
-  }
+  // HANDLERS
+  const addWaiter = async () => {
+      if(!newWaiterName || !newWaiterPin) return alert("Enter Name and PIN");
+      await fetch('/api/users', { method: 'POST', body: JSON.stringify({ name: newWaiterName, pin: newWaiterPin }) });
+      setNewWaiterName(''); setNewWaiterPin('');
+      refreshData();
+  };
 
-  if (!stats) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-400">
-        Failed to load dashboard
-      </div>
-    );
-  }
+  const deleteWaiter = async (id: string) => {
+      if(confirm('Delete Waiter?')) {
+          await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+          refreshData();
+      }
+  };
+
+  const addTable = async () => {
+      if(!newTableName || !newTableNumber) return alert("Enter Name and Number");
+      await fetch('/api/tables/manage', { method: 'POST', body: JSON.stringify({ name: newTableName, number: newTableNumber }) });
+      setNewTableName(''); setNewTableNumber('');
+      refreshData();
+  };
+
+  const deleteTable = async (id: string) => {
+      if(confirm('Delete Table?')) {
+          await fetch(`/api/tables/manage?id=${id}`, { method: 'DELETE' });
+          refreshData();
+      }
+  };
+
+  if (isLoading) return <div className="h-screen flex items-center justify-center bg-gray-950"><Loader2 className="animate-spin text-orange-500" /></div>;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white px-4 sm:px-6 lg:px-10 py-6">
-      
+    <div className="min-h-screen bg-gray-950 text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-
+        
         {/* Header */}
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-500">
-            Super Admin Dashboard
-          </h1>
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 transition px-4 py-2 rounded-lg text-sm"
-          >
-            <LogOut size={18} />
-            Logout
-          </button>
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <h1 className="text-3xl font-bold text-orange-500">Super Admin</h1>
+            <div className="flex gap-2">
+                <button onClick={exportToExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-bold">
+                    <Download size={16} /> Export Excel
+                </button>
+                <button onClick={() => { fetch('/api/auth/logout', {method:'POST'}); router.push('/'); }} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm">
+                    <LogOut size={16} /> Logout
+                </button>
+            </div>
         </header>
 
-        {/* Monthly Income Card */}
-        <div className="bg-gray-900 rounded-2xl p-5 sm:p-8 border border-gray-800 mb-10 flex flex-col sm:flex-row items-start sm:items-center gap-6 shadow-lg">
-          <div className="p-4 bg-green-500/20 rounded-full text-green-400">
-            <TrendingUp size={40} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs sm:text-sm uppercase tracking-wider font-semibold">
-              Total Monthly Income
-            </p>
-            <p className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mt-3">
-              ₹{stats.monthlyIncome.toFixed(2)}
-            </p>
-          </div>
+        {/* Navigation Tabs */}
+        <div className="flex gap-4 border-b border-gray-800 mb-8 overflow-x-auto">
+            <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<TrendingUp size={18} />} label="Dashboard" />
+            <TabButton active={activeTab === 'waiters'} onClick={() => setActiveTab('waiters')} icon={<Users size={18} />} label="Manage Waiters" />
+            <TabButton active={activeTab === 'tables'} onClick={() => setActiveTab('tables')} icon={<TableIcon size={18} />} label="Manage Tables" />
         </div>
 
-        {/* Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Waiter Sales */}
-          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 shadow-md">
-            <div className="flex items-center gap-3 mb-6">
-              <Users className="text-blue-400" />
-              <h2 className="text-lg sm:text-xl font-semibold">
-                Sales by Waiter
-              </h2>
-            </div>
-
-            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
-              {Object.entries(stats.waiterSales).length > 0 ? (
-                Object.entries(stats.waiterSales)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([name, total]) => (
-                    <div
-                      key={name}
-                      className="flex justify-between items-center bg-gray-800/60 px-4 py-3 rounded-lg"
-                    >
-                      <span className="text-sm sm:text-base">
-                        {name}
-                      </span>
-                      <span className="font-mono text-blue-300 text-sm sm:text-base">
-                        ₹{total.toFixed(0)}
-                      </span>
+        {/* CONTENT AREA */}
+        {activeTab === 'dashboard' && stats && (
+            <div className="space-y-8 animate-in fade-in">
+                {/* Income Card */}
+                <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800 flex items-center gap-6">
+                    <div className="p-4 bg-green-500/20 rounded-full text-green-400"><TrendingUp size={40} /></div>
+                    <div>
+                        <p className="text-gray-400 text-sm font-bold uppercase">Monthly Income</p>
+                        <p className="text-5xl font-black mt-2">₹{stats.monthlyIncome.toFixed(0)}</p>
                     </div>
-                  ))
-              ) : (
-                <p className="text-gray-500">No sales yet</p>
-              )}
-            </div>
-          </div>
+                </div>
 
-          {/* Table Sales */}
-          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 shadow-md">
-            <div className="flex items-center gap-3 mb-6">
-              <Calendar className="text-purple-400" />
-              <h2 className="text-lg sm:text-xl font-semibold">
-                Sales by Table
-              </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card title="Waiter Performance" icon={<Users className="text-blue-400" />}>
+                        {Object.entries(stats.waiterSales).map(([name, val]) => (
+                            <Row key={name} label={name} value={`₹${val}`} />
+                        ))}
+                    </Card>
+                    <Card title="Table Performance" icon={<Calendar className="text-purple-400" />}>
+                        {Object.entries(stats.tableSales).map(([name, val]) => (
+                            <Row key={name} label={name} value={`₹${val}`} />
+                        ))}
+                    </Card>
+                </div>
             </div>
+        )}
 
-            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
-              {Object.entries(stats.tableSales).length > 0 ? (
-                Object.entries(stats.tableSales)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([name, total]) => (
-                    <div
-                      key={name}
-                      className="flex justify-between items-center bg-gray-800/60 px-4 py-3 rounded-lg"
-                    >
-                      <span className="text-sm sm:text-base">
-                        {name}
-                      </span>
-                      <span className="font-mono text-purple-300 text-sm sm:text-base">
-                        ₹{total.toFixed(0)}
-                      </span>
+        {activeTab === 'waiters' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in">
+                {/* Add Form */}
+                <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 h-fit">
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Plus size={18} /> Add New Waiter</h3>
+                    <div className="space-y-3">
+                        <input placeholder="Name (e.g. Waiter 5)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newWaiterName} onChange={e => setNewWaiterName(e.target.value)} />
+                        <input placeholder="PIN (4 digits)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newWaiterPin} onChange={e => setNewWaiterPin(e.target.value)} />
+                        <button onClick={addWaiter} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded font-bold">Create Waiter</button>
                     </div>
-                  ))
-              ) : (
-                <p className="text-gray-500">No sales yet</p>
-              )}
-            </div>
-          </div>
+                </div>
 
-        </div>
+                {/* List */}
+                <div className="md:col-span-2 space-y-3">
+                    {waiters.map(w => (
+                        <div key={w._id} className="bg-gray-900 p-4 rounded-lg flex justify-between items-center border border-gray-800">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-gray-400 font-bold">{w.name[0]}</div>
+                                <div>
+                                    <p className="font-bold">{w.name}</p>
+                                    <p className="text-xs text-gray-500">ID: {w._id}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => deleteWaiter(w._id)} className="text-red-500 hover:bg-red-500/10 p-2 rounded"><Trash2 size={18} /></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'tables' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in">
+                {/* Add Form */}
+                <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 h-fit">
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Plus size={18} /> Add New Table</h3>
+                    <div className="space-y-3">
+                        <input placeholder="Table Name (e.g. Garden-5)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newTableName} onChange={e => setNewTableName(e.target.value)} />
+                        <input placeholder="Table Number (Unique ID)" type="number" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newTableNumber} onChange={e => setNewTableNumber(e.target.value)} />
+                        <button onClick={addTable} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded font-bold">Create Table</button>
+                    </div>
+                </div>
+
+                {/* List */}
+                <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {tables.map(t => (
+                        <div key={t._id} className="bg-gray-900 p-4 rounded-lg border border-gray-800 flex flex-col justify-between h-24">
+                            <div className="flex justify-between items-start">
+                                <span className="font-bold text-lg">{t.name}</span>
+                                <button onClick={() => deleteTable(t._id)} className="text-red-500 hover:text-red-400"><Trash2 size={16} /></button>
+                            </div>
+                            <p className="text-xs text-gray-500">No: {t.table_number}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
       </div>
     </div>
   );
+}
+
+// Sub-components for cleaner code
+function TabButton({ active, onClick, icon, label }: any) {
+    return (
+        <button 
+            onClick={onClick}
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${active ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+            {icon} {label}
+        </button>
+    )
+}
+
+function Card({ title, icon, children }: any) {
+    return (
+        <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+            <div className="flex items-center gap-3 mb-6">
+                {icon}
+                <h2 className="text-xl font-bold">{title}</h2>
+            </div>
+            <div className="space-y-3">{children}</div>
+        </div>
+    )
+}
+
+function Row({ label, value }: any) {
+    return (
+        <div className="flex justify-between items-center bg-gray-800/50 px-4 py-3 rounded-lg">
+            <span>{label}</span>
+            <span className="font-mono text-blue-300">{value}</span>
+        </div>
+    )
 }

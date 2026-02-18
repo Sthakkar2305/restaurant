@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { MenuCard } from '@/components/waiter/menu-card';
 import { TableSelector } from '@/components/waiter/table-selector';
 import { OrderSummary, CartItem } from '@/components/waiter/order-summary';
-import { LogOut, Loader2, User, Mail, Lock, ShoppingCart, ArrowDown } from 'lucide-react'; // Added icons
+import { Lock, ArrowUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Toast } from '@/components/waiter/Toast'; // Import your Toast component
+import { Toast } from '@/components/waiter/Toast'; 
 
 export default function WaiterPage() {
   const router = useRouter();
@@ -22,8 +22,9 @@ export default function WaiterPage() {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
   const [isSending, setIsSending] = useState(false);
-
-  // NEW: Toast State
+  
+  // NEW: Control the mobile cart popup
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function WaiterPage() {
       setSelectedTableId(null);
       setCustomerName('');
       setCustomerEmail('');
+      setIsCartOpen(false); // Close modal on success
       setToastMessage(table.status === 'occupied' ? '✅ Order Updated!' : '✅ New Order Sent!');
       
       const tRes = await fetch('/api/tables');
@@ -114,32 +116,18 @@ export default function WaiterPage() {
     if (quantity === 0) newCart.delete(itemId);
     else newCart.set(itemId, { menuItemId: itemId, name: item.name, price: item.price, quantity });
     setCart(newCart);
-
-    // NEW: Show Toast Notification
-    setToastMessage(`${item.name} added to cart`);
+    setToastMessage(`${item.name} added`);
   };
 
-  // Helper to scroll to cart on mobile
-  const scrollToCart = () => {
-    const cartElement = document.getElementById('order-summary-section');
-    if (cartElement) {
-      cartElement.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  // Calculate totals for floating bar
+  // Stats for floating bar
   const totalItems = Array.from(cart.values()).reduce((acc, item) => acc + item.quantity, 0);
   const totalPrice = Array.from(cart.values()).reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32 md:pb-20"> {/* Added extra padding-bottom for mobile bar */}
+    <div className="min-h-screen bg-gray-50 pb-32 md:pb-20">
       
-      {/* Toast Notification */}
       {toastMessage && (
-        <Toast 
-          message={toastMessage} 
-          onClose={() => setToastMessage(null)} 
-        />
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       )}
 
       <header className="bg-white shadow p-4 flex justify-between sticky top-0 z-20">
@@ -238,32 +226,31 @@ export default function WaiterPage() {
           </div>
         </div>
 
-        {/* Order Summary (Sidebar on Desktop, Bottom on Mobile) */}
-        <div id="order-summary-section" className="md:sticky md:top-24 h-fit">
+        {/* Order Summary (Desktop Side / Mobile Modal) */}
+        <div className="md:sticky md:top-24 h-fit">
            <OrderSummary 
                 items={Array.from(cart.values())} 
                 selectedTableNumber={tables.find(t => t._id === selectedTableId)?.table_number}
                 onRemoveItem={(id) => { const n = new Map(cart); n.delete(id); setCart(n); }}
                 onSendOrder={handleSendOrder}
                 isLoading={isSending}
+                isOpen={isCartOpen}
+                onClose={() => setIsCartOpen(false)}
            />
         </div>
       </div>
 
-      {/* NEW: Mobile Floating Cart Bar */}
-      {cart.size > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 md:hidden z-50 animate-in slide-in-from-bottom-2 fade-in">
-            <div className="bg-black text-white p-4 rounded-xl shadow-2xl flex items-center justify-between">
+      {/* Floating Bar (Opens Modal) */}
+      {cart.size > 0 && !isCartOpen && (
+        <div className="fixed bottom-4 left-4 right-4 md:hidden z-40 animate-in slide-in-from-bottom-2 fade-in">
+            <div className="bg-black text-white p-4 rounded-xl shadow-2xl flex items-center justify-between cursor-pointer" onClick={() => setIsCartOpen(true)}>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-400 font-medium">{totalItems} Items Added</span>
                     <span className="text-lg font-bold">₹{totalPrice.toFixed(0)}</span>
                 </div>
                 
-                <button 
-                    onClick={scrollToCart}
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-transform active:scale-95"
-                >
-                    View Cart <ArrowDown size={16} />
+                <button className="bg-orange-600 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg">
+                    View Cart <ArrowUp size={16} />
                 </button>
             </div>
         </div>
