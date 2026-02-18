@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { MenuCard } from '@/components/waiter/menu-card';
 import { TableSelector } from '@/components/waiter/table-selector';
 import { OrderSummary, CartItem } from '@/components/waiter/order-summary';
-import { LogOut, Loader2, User, Mail, Lock } from 'lucide-react';
+import { LogOut, Loader2, User, Mail, Lock, ShoppingCart, ArrowDown } from 'lucide-react'; // Added icons
 import { useRouter } from 'next/navigation';
+import { Toast } from '@/components/waiter/Toast'; // Import your Toast component
 
 export default function WaiterPage() {
   const router = useRouter();
@@ -22,9 +23,11 @@ export default function WaiterPage() {
   const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
   const [isSending, setIsSending] = useState(false);
 
+  // NEW: Toast State
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   useEffect(() => {
     const init = async () => {
-      // 1. Get Current User
       const authRes = await fetch('/api/auth/me');
       if (authRes.ok) {
           const user = await authRes.json();
@@ -33,7 +36,6 @@ export default function WaiterPage() {
           router.push('/');
       }
 
-      // 2. Get Data
       const [menuRes, tablesRes] = await Promise.all([
           fetch('/api/menu'),
           fetch('/api/tables'),
@@ -55,21 +57,18 @@ export default function WaiterPage() {
       const table = tables.find(t => t._id === tableId);
       if (!table) return;
 
-      // ACCESS CONTROL LOGIC
       if (table.status === 'occupied' && currentUser) {
           if (table.currentWaiterId && table.currentWaiterId !== currentUser.userId) {
               alert(`⛔ Access Denied!\nThis table is served by another waiter.`);
               return;
           }
       }
-
       setSelectedTableId(tableId);
   };
 
   const handleSendOrder = async () => {
     if (!selectedTableId || cart.size === 0) return;
     
-    // Only require name for NEW orders (available tables)
     const table = tables.find(t => t._id === selectedTableId);
     if (table?.status === 'available' && !customerName) { 
         alert('Please enter Customer Name'); return; 
@@ -95,7 +94,7 @@ export default function WaiterPage() {
       setSelectedTableId(null);
       setCustomerName('');
       setCustomerEmail('');
-      alert(table.status === 'occupied' ? '✅ Order Updated!' : '✅ New Order Sent!');
+      setToastMessage(table.status === 'occupied' ? '✅ Order Updated!' : '✅ New Order Sent!');
       
       const tRes = await fetch('/api/tables');
       const tData = await tRes.json();
@@ -105,7 +104,6 @@ export default function WaiterPage() {
     finally { setIsSending(false); }
   };
 
-  // Helper filters
   const filteredItems = selectedCategory
     ? menu.filter((item) => item.category === selectedCategory)
     : menu;
@@ -116,10 +114,34 @@ export default function WaiterPage() {
     if (quantity === 0) newCart.delete(itemId);
     else newCart.set(itemId, { menuItemId: itemId, name: item.name, price: item.price, quantity });
     setCart(newCart);
+
+    // NEW: Show Toast Notification
+    setToastMessage(`${item.name} added to cart`);
   };
 
+  // Helper to scroll to cart on mobile
+  const scrollToCart = () => {
+    const cartElement = document.getElementById('order-summary-section');
+    if (cartElement) {
+      cartElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // Calculate totals for floating bar
+  const totalItems = Array.from(cart.values()).reduce((acc, item) => acc + item.quantity, 0);
+  const totalPrice = Array.from(cart.values()).reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-32 md:pb-20"> {/* Added extra padding-bottom for mobile bar */}
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <Toast 
+          message={toastMessage} 
+          onClose={() => setToastMessage(null)} 
+        />
+      )}
+
       <header className="bg-white shadow p-4 flex justify-between sticky top-0 z-20">
         <div>
             <h1 className="font-bold text-xl">Waiter POS</h1>
@@ -131,26 +153,24 @@ export default function WaiterPage() {
       <div className="max-w-7xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           
-          {/* Customer Input (Only show if table is available or if we want to update) */}
           <div className="bg-white p-4 rounded-lg shadow-sm border space-y-3">
              <h3 className="font-bold text-gray-700">Customer Details</h3>
              <div className="grid grid-cols-2 gap-4">
                 <input 
                     placeholder="Name" 
-                    className="border rounded px-3 py-2"
+                    className="border rounded px-3 py-2 w-full"
                     value={customerName}
                     onChange={e => setCustomerName(e.target.value)}
                 />
                 <input 
                     placeholder="Email" 
-                    className="border rounded px-3 py-2"
+                    className="border rounded px-3 py-2 w-full"
                     value={customerEmail}
                     onChange={e => setCustomerEmail(e.target.value)}
                 />
              </div>
           </div>
 
-          {/* Table Selector with Lock Icon */}
           <div className="bg-white rounded-lg shadow-md p-4">
             <h2 className="text-lg font-bold text-gray-900 mb-4">Select Table</h2>
             <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
@@ -178,37 +198,48 @@ export default function WaiterPage() {
             </div>
           </div>
 
-          {/* Categories */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
              <button onClick={() => setSelectedCategory(null)} className={`px-4 py-2 rounded-full whitespace-nowrap ${!selectedCategory ? 'bg-black text-white' : 'bg-white border'}`}>All</button>
              {categories.map(c => (
                  <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategory === c.id ? 'bg-black text-white' : 'bg-white border'}`}>{c.name}</button>
              ))}
           </div>
 
-          {/* Menu */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map(item => (
-                <div key={item._id} className="bg-white rounded-lg shadow overflow-hidden border">
+            {filteredItems.map(item => {
+                const itemInCart = cart.get(item._id || item.id);
+                const quantity = itemInCart?.quantity || 0;
+
+                return (
+                <div key={item._id} className={`bg-white rounded-lg shadow overflow-hidden border transition-all ${quantity > 0 ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'}`}>
                     <div className="h-32 bg-gray-200 relative">
                         {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
+                        {quantity > 0 && (
+                            <div className="absolute top-2 right-2 bg-orange-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md">
+                                {quantity}
+                            </div>
+                        )}
                     </div>
                     <div className="p-3">
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start mb-2">
                             <h3 className="font-bold text-sm line-clamp-1">{item.name}</h3>
                             <span className="text-orange-600 font-bold">₹{item.price}</span>
                         </div>
-                        <button onClick={() => handleAddToCart(item, (cart.get(item._id || item.id)?.quantity || 0) + 1)} className="mt-2 w-full bg-orange-100 text-orange-700 py-1 rounded text-sm font-bold hover:bg-orange-200">
-                            Add +
+                        
+                        <button 
+                            onClick={() => handleAddToCart(item, quantity + 1)} 
+                            className="w-full bg-gray-100 hover:bg-orange-100 text-gray-800 hover:text-orange-700 py-2 rounded-md text-sm font-bold transition-colors active:scale-95"
+                        >
+                            {quantity > 0 ? 'Add Another +' : 'Add to Order'}
                         </button>
                     </div>
                 </div>
-            ))}
+            )})}
           </div>
         </div>
 
-        {/* Order Summary */}
-        <div className="md:sticky md:top-24 h-fit">
+        {/* Order Summary (Sidebar on Desktop, Bottom on Mobile) */}
+        <div id="order-summary-section" className="md:sticky md:top-24 h-fit">
            <OrderSummary 
                 items={Array.from(cart.values())} 
                 selectedTableNumber={tables.find(t => t._id === selectedTableId)?.table_number}
@@ -218,6 +249,26 @@ export default function WaiterPage() {
            />
         </div>
       </div>
+
+      {/* NEW: Mobile Floating Cart Bar */}
+      {cart.size > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 md:hidden z-50 animate-in slide-in-from-bottom-2 fade-in">
+            <div className="bg-black text-white p-4 rounded-xl shadow-2xl flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="text-xs text-gray-400 font-medium">{totalItems} Items Added</span>
+                    <span className="text-lg font-bold">₹{totalPrice.toFixed(0)}</span>
+                </div>
+                
+                <button 
+                    onClick={scrollToCart}
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-transform active:scale-95"
+                >
+                    View Cart <ArrowDown size={16} />
+                </button>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 }
