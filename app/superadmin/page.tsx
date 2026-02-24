@@ -2,27 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, TrendingUp, Users, Calendar, LogOut, Plus, Trash2, Download, Table as TableIcon } from 'lucide-react';
-import * as XLSX from 'xlsx'; // Import Excel library
+import { Loader2, TrendingUp, Users, Calendar, LogOut, Plus, Trash2, Download, Table as TableIcon, ChefHat } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface StatsType {
   waiterSales: Record<string, number>;
   tableSales: Record<string, number>;
   monthlyIncome: number;
-  allOrders: any[]; // Store full data for export
+  allOrders: any[];
 }
 
 export default function SuperAdminPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'waiters' | 'tables'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'tables'>('dashboard');
   const [stats, setStats] = useState<StatsType | null>(null);
-  const [waiters, setWaiters] = useState<any[]>([]);
+  
+  // Combined Waiters and Chefs into one Staff array
+  const [staff, setStaff] = useState<any[]>([]); 
   const [tables, setTables] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form States
-  const [newWaiterName, setNewWaiterName] = useState('');
-  const [newWaiterPin, setNewWaiterPin] = useState('');
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffPin, setNewStaffPin] = useState('');
+  const [roleSelection, setRoleSelection] = useState('waiter'); // NEW: Waiter or Chef
+  
   const [newTableName, setNewTableName] = useState('');
   const [newTableNumber, setNewTableNumber] = useState('');
 
@@ -50,10 +54,10 @@ export default function SuperAdminPage() {
 
       setStats({ waiterSales, tableSales, monthlyIncome, allOrders: paidOrders });
 
-      // 2. Fetch Waiters
-      const wRes = await fetch('/api/users');
-      const wData = await wRes.json();
-      setWaiters(wData.waiters || []);
+      // 2. Fetch Users (Waiters & Chefs)
+      const uRes = await fetch('/api/users');
+      const uData = await uRes.json();
+      setStaff([...(uData.waiters || []), ...(uData.chefs || [])]);
 
       // 3. Fetch Tables
       const tRes = await fetch('/api/tables');
@@ -81,10 +85,8 @@ export default function SuperAdminPage() {
   // EXCEL EXPORT
   const exportToExcel = () => {
       if (!stats) return;
-      
       const wb = XLSX.utils.book_new();
       
-      // Sheet 1: Sales Summary
       const summaryData = [
           ['Metric', 'Value'],
           ['Total Monthly Income', stats.monthlyIncome],
@@ -96,7 +98,6 @@ export default function SuperAdminPage() {
       const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, ws1, "Summary");
 
-      // Sheet 2: All Orders
       const orderData = stats.allOrders.map(o => ({
           ID: o.orderId,
           Date: new Date(o.createdAt).toLocaleDateString(),
@@ -111,15 +112,18 @@ export default function SuperAdminPage() {
   };
 
   // HANDLERS
-  const addWaiter = async () => {
-      if(!newWaiterName || !newWaiterPin) return alert("Enter Name and PIN");
-      await fetch('/api/users', { method: 'POST', body: JSON.stringify({ name: newWaiterName, pin: newWaiterPin }) });
-      setNewWaiterName(''); setNewWaiterPin('');
+  const addUser = async () => {
+      if(!newStaffName || !newStaffPin) return alert("Enter Name and PIN");
+      await fetch('/api/users', { 
+          method: 'POST', 
+          body: JSON.stringify({ name: newStaffName, pin: newStaffPin, role: roleSelection }) 
+      });
+      setNewStaffName(''); setNewStaffPin(''); setRoleSelection('waiter');
       refreshData();
   };
 
-  const deleteWaiter = async (id: string) => {
-      if(confirm('Delete Waiter?')) {
+  const deleteUser = async (id: string) => {
+      if(confirm('Delete this staff member?')) {
           await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
           refreshData();
       }
@@ -161,7 +165,7 @@ export default function SuperAdminPage() {
         {/* Navigation Tabs */}
         <div className="flex gap-4 border-b border-gray-800 mb-8 overflow-x-auto">
             <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<TrendingUp size={18} />} label="Dashboard" />
-            <TabButton active={activeTab === 'waiters'} onClick={() => setActiveTab('waiters')} icon={<Users size={18} />} label="Manage Waiters" />
+            <TabButton active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} icon={<Users size={18} />} label="Manage Staff" />
             <TabButton active={activeTab === 'tables'} onClick={() => setActiveTab('tables')} icon={<TableIcon size={18} />} label="Manage Tables" />
         </div>
 
@@ -192,30 +196,41 @@ export default function SuperAdminPage() {
             </div>
         )}
 
-        {activeTab === 'waiters' && (
+        {activeTab === 'staff' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in">
                 {/* Add Form */}
                 <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 h-fit">
-                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Plus size={18} /> Add New Waiter</h3>
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Plus size={18} /> Add New Staff</h3>
                     <div className="space-y-3">
-                        <input placeholder="Name (e.g. Waiter 5)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newWaiterName} onChange={e => setNewWaiterName(e.target.value)} />
-                        <input placeholder="PIN (4 digits)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newWaiterPin} onChange={e => setNewWaiterPin(e.target.value)} />
-                        <button onClick={addWaiter} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded font-bold">Create Waiter</button>
+                        <select className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white outline-none" value={roleSelection} onChange={e => setRoleSelection(e.target.value)}>
+                            <option value="waiter">Waiter</option>
+                            <option value="chef">Chef (Kitchen)</option>
+                        </select>
+                        <input placeholder="Name (e.g. John)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newStaffName} onChange={e => setNewStaffName(e.target.value)} />
+                        <input placeholder="PIN (4 digits)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={newStaffPin} onChange={e => setNewStaffPin(e.target.value)} />
+                        <button onClick={addUser} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded font-bold">Create Staff</button>
                     </div>
                 </div>
 
                 {/* List */}
                 <div className="md:col-span-2 space-y-3">
-                    {waiters.map(w => (
-                        <div key={w._id} className="bg-gray-900 p-4 rounded-lg flex justify-between items-center border border-gray-800">
+                    {staff.map(user => (
+                        <div key={user._id} className="bg-gray-900 p-4 rounded-lg flex justify-between items-center border border-gray-800">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-gray-400 font-bold">{w.name[0]}</div>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${user.role === 'chef' ? 'bg-blue-600' : 'bg-orange-500'}`}>
+                                    {user.role === 'chef' ? <ChefHat size={20} /> : <Users size={20} />}
+                                </div>
                                 <div>
-                                    <p className="font-bold">{w.name}</p>
-                                    <p className="text-xs text-gray-500">ID: {w._id}</p>
+                                    <p className="font-bold flex items-center gap-2">
+                                        {user.name} 
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase ${user.role === 'chef' ? 'bg-blue-900 text-blue-300' : 'bg-orange-900 text-orange-300'}`}>
+                                            {user.role}
+                                        </span>
+                                    </p>
+                                    <p className="text-xs text-gray-500">ID: {user._id}</p>
                                 </div>
                             </div>
-                            <button onClick={() => deleteWaiter(w._id)} className="text-red-500 hover:bg-red-500/10 p-2 rounded"><Trash2 size={18} /></button>
+                            <button onClick={() => deleteUser(user._id)} className="text-red-500 hover:bg-red-500/10 p-2 rounded"><Trash2 size={18} /></button>
                         </div>
                     ))}
                 </div>

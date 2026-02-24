@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
-import { getCollection, generateId } from '@/lib/mongodb';
+import { getCollection } from '@/lib/mongodb';
+import { ObjectId } from 'mongodb';
 
 export async function GET() {
   const users = await getCollection('users');
-  const allWaiters = await users.find({ role: 'waiter' }).toArray();
-  return NextResponse.json({ waiters: allWaiters });
+  const waiters = await users.find({ role: 'waiter' }).toArray();
+  const chefs = await users.find({ role: 'chef' }).toArray(); // Fetch Chefs
+  return NextResponse.json({ waiters, chefs });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, pin } = await request.json();
+    const { name, pin, role } = await request.json(); // Accept Role
     const users = await getCollection('users');
-    
-    // Hash PIN
     const hashedPin = await bcrypt.hash(pin, 10);
     
     await users.insertOne({
       name,
-      role: 'waiter',
+      role: role || 'waiter', // Default to waiter if missing
       pinHash: hashedPin,
       email: `${name.replace(/\s+/g, '').toLowerCase()}@pos.com`,
       createdAt: new Date(),
@@ -34,11 +34,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
-
+  if (!id) {
+    return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+  }
   const users = await getCollection('users');
-  const { ObjectId } = require('mongodb');
   await users.deleteOne({ _id: new ObjectId(id) });
-  
   return NextResponse.json({ success: true });
 }

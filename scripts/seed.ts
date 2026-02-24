@@ -2,65 +2,77 @@ import { MongoClient } from 'mongodb';
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
 import 'dotenv/config';
 
 const MONGODB_URI = process.env.MONGODB_URI;
-const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
-if (!UNSPLASH_ACCESS_KEY) {
-  console.error('❌ UNSPLASH_ACCESS_KEY missing in .env');
-  process.exit(1);
-}
-
-/* ----------------------------------
-   Helper: Clean CSV Text
----------------------------------- */
 function clean(text: string) {
-  return text
-    ? text.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '')
-        .replace(/["']/g, '')
-        .trim()
-    : '';
+  return text ? text.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '').replace(/["']/g, '').trim() : '';
 }
 
 /* ----------------------------------
-   Unsplash Image Fetcher
+   THE PERFECT INDIAN FOOD IMAGE MAPPER
+   (Hand-picked, high-quality images matched to YOUR exact menu)
 ---------------------------------- */
-async function getImageForFood(name: string): Promise<string | null> {
-  try {
-    const response = await axios.get(
-      'https://api.unsplash.com/search/photos',
-      {
-        params: {
-          query: `${name} food dish`,
-          per_page: 1,
-          orientation: 'landscape',
-        },
-        headers: {
-          Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
-        },
-      }
-    );
+function getPerfectImage(name: string): string {
+  const n = name.toLowerCase();
 
-    const results = response.data.results;
+  // 1. Drinks
+  if (n.includes('lassi') || n.includes('butter milk') || n.includes('curd')) 
+    return 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=500&q=80'; // Glass of rich lassi
+  if (n.includes('cold drink')) 
+    return 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=500&q=80'; // Cola with ice
 
-    if (results.length > 0) {
-      return results[0].urls.regular;
-    }
+  // 2. Soups
+  if (n.includes('soup')) 
+    return 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=500&q=80'; // Restaurant Soup bowl
 
-    return null;
+  // 3. Starters / Chinese
+  if (n.includes('noodle')) 
+    return 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=500&q=80'; // Hakka Noodles
+  if (n.includes('manchurian') || n.includes('chilli') || n.includes('crispy') || n.includes('bhel')) 
+    return 'https://images.unsplash.com/photo-1625944230945-1b7dd12ece63?w=500&q=80'; // Gobi/Paneer Chilli Dry
+  if (n.includes('fries') || n.includes('chips')) 
+    return 'https://images.unsplash.com/photo-1576107232684-1279f390859f?w=500&q=80'; // French fries
+  if (n.includes('papad') || n.includes('kabab') || n.includes('tikka dry')) 
+    return 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=500&q=80'; // Samosa/Indian Starter plate
 
-  } catch (err: any) {
-    if (err.response?.status === 403) {
-      console.log('\n⛔ UNSPLASH RATE LIMIT REACHED (50/hour)');
-      console.log('👉 Run this script again after 1 hour.\n');
-      process.exit(0);
-    }
+  // 4. Salads
+  if (n.includes('salad')) 
+    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=500&q=80'; // Fresh healthy salad
 
-    console.error(`Image fetch failed for ${name}`);
-    return null;
-  }
+  // 5. Sizzlers
+  if (n.includes('sizzler')) 
+    return 'https://images.unsplash.com/photo-1544025162-83151834241e?w=500&q=80'; // Smoke sizzler pan
+
+  // 6. Main Course (Paneer & Veg)
+  if (n.includes('palak') || n.includes('hariyali')) 
+    return 'https://images.unsplash.com/photo-1601050690117-94f5f6bd9fc8?w=500&q=80'; // Green Palak Paneer
+  if (n.includes('paneer') && (n.includes('butter') || n.includes('tikka') || n.includes('makhani'))) 
+    return 'https://images.unsplash.com/photo-1631452180519-c014fe946bc0?w=500&q=80'; // Rich Red Paneer Gravy
+  if (n.includes('kaju') || n.includes('kofta') || n.includes('korma') || n.includes('veg')) 
+    return 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80'; // Yellow/Rich Mix Veg Curry
+
+  // 7. Dal
+  if (n.includes('dal')) 
+    return 'https://images.unsplash.com/photo-1546833999-28185880bc89?w=500&q=80'; // Dal Fry/Tadka
+
+  // 8. Breads (Roti / Naan / Paratha)
+  if (n.includes('roti') || n.includes('naan') || n.includes('kulcha') || n.includes('paratha')) 
+    return 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=500&q=80'; // Butter Naan basket
+
+  // 9. Rice & Biryani
+  if (n.includes('biryani')) 
+    return 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500&q=80'; // Dum Biryani in pot
+  if (n.includes('rice') || n.includes('pulav')) 
+    return 'https://images.unsplash.com/photo-1574484284002-952d92456975?w=500&q=80'; // Jeera/Fried Rice
+
+  // 10. South Indian
+  if (n.includes('dosa') || n.includes('uttapam')) 
+    return 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=500&q=80'; // Crispy Dosa with chutney
+
+  // Fallback for anything else
+  return 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80';
 }
 
 /* ----------------------------------
@@ -78,19 +90,14 @@ async function seed() {
     await client.connect();
     const db = client.db('restaurant_pos');
 
-    console.log('🧹 Clearing users & tables (menu will NOT be cleared)...');
-
+    console.log('🧹 Clearing old tables and orders...');
     await Promise.all([
       db.collection('users').deleteMany({}),
       db.collection('tables').deleteMany({}),
       db.collection('orders').deleteMany({}),
     ]);
 
-    /* ----------------------------------
-       USERS
-    ---------------------------------- */
     console.log('👤 Creating Staff...');
-
     const users = [
       { name: 'Super Admin', role: 'superadmin', pin: '7896' },
       { name: 'Admin', role: 'admin', pin: '9999' },
@@ -102,39 +109,22 @@ async function seed() {
 
     for (const user of users) {
       const hashedPin = await bcrypt.hash(user.pin, 10);
-
       await db.collection('users').insertOne({
         email: `${user.name.replace(/\s/g, '').toLowerCase()}@pos.com`,
         name: user.name,
         role: user.role,
         pinHash: hashedPin,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date(), updatedAt: new Date(),
       });
     }
 
-    /* ----------------------------------
-       TABLES
-    ---------------------------------- */
     console.log('🪑 Creating Default Tables...');
-
     const defaultTables = Array.from({ length: 10 }, (_, i) => ({
-      name: `Table ${i + 1}`,
-      table_number: i + 1,
-      seating_capacity: 4,
-      status: 'available',
-      currentWaiterId: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      name: `Table ${i + 1}`, table_number: i + 1, seating_capacity: 4, status: 'available', currentWaiterId: null, createdAt: new Date(), updatedAt: new Date(),
     }));
-
     await db.collection('tables').insertMany(defaultTables);
 
-    /* ----------------------------------
-       MENU WITH AUTO RESUME
-    ---------------------------------- */
-    console.log('\n🍕 Importing Menu (Smart Auto-Resume Enabled)...');
-
+    console.log('\n🍕 Fixing Menu Images (Applying Perfect Image Map)...');
     const menuPath = path.join(process.cwd(), 'menu.csv');
 
     if (!fs.existsSync(menuPath)) {
@@ -144,66 +134,42 @@ async function seed() {
 
     const lines = fs.readFileSync(menuPath, 'utf-8').split(/\r?\n/);
     const headers = lines[0].split(',').map(h => clean(h).toUpperCase());
-
     const nameIdx = headers.findIndex(h => h.includes('NAME'));
     const priceIdx = headers.findIndex(h => h.includes('RATE') || h.includes('PRICE'));
     const catIdx = headers.findIndex(h => h.includes('CATEGORY'));
 
-    let processedCount = 0;
+    let updatedCount = 0;
 
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
-
-      const row = lines[i]
-        .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-        .map(clean);
-
+      const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(clean);
       const name = row[nameIdx];
       const price = parseFloat(row[priceIdx]);
       const category = catIdx > -1 ? row[catIdx] : 'Main Course';
 
       if (!name || isNaN(price)) continue;
 
-      // 1. Check if it's already in the database
+      // Get the perfect image instantly based on the name!
+      const perfectImageUrl = getPerfectImage(name);
+
       const existing = await db.collection('menu_items').findOne({ name });
 
-      // 2. SMART CHECK: Skip ONLY if it exists AND it does NOT have a placeholder image
-      if (existing && existing.image && !existing.image.includes('placeholder.com')) {
-        console.log(`⏭ Skipping (Already has real image): ${name}`);
-        continue;
-      }
-
-      console.log(`🔎 Fetching real image for: ${name}`);
-
-      const imageUrl = await getImageForFood(name);
-      const finalImage = imageUrl || 'https://via.placeholder.com/400x300?text=Food';
-
       if (existing) {
-        // It's in the DB, but had a fake image. Update it!
+        // Force update the item to use our perfect image
         await db.collection('menu_items').updateOne(
           { _id: existing._id },
-          { $set: { image: finalImage, updatedAt: new Date() } }
+          { $set: { image: perfectImageUrl, updatedAt: new Date() } }
         );
-        console.log(`🔄 Updated existing item with real image: ${name}`);
       } else {
-        // Not in DB at all. Insert new.
         await db.collection('menu_items').insertOne({
-          name,
-          category: category.trim() || 'Main Course',
-          price,
-          description: '',
-          image: finalImage,
-          available: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          name, category: category.trim() || 'Main Course', price, description: '',
+          image: perfectImageUrl, available: true, createdAt: new Date(), updatedAt: new Date(),
         });
-        console.log(`✅ Inserted new item: ${name}`);
       }
-
-      processedCount++;
+      updatedCount++;
     }
 
-    console.log(`\n✅ Finished. Processed ${processedCount} items.\n`);
+    console.log(`\n✅ Finished. Perfectly updated ${updatedCount} menu items!\n`);
     process.exit(0);
 
   } catch (err) {
