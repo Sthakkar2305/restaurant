@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Shield, ChevronLeft, Loader2, Lock, ChefHat } from 'lucide-react';
+import { User, Shield, ChevronLeft, Loader2, Lock, ChefHat, Crown } from 'lucide-react';
 
 const ADMIN = { name: 'Admin', role: 'admin', color: 'bg-gray-800 hover:bg-gray-900', iconColor: 'text-gray-300' };
+// We keep SUPER_ADMIN here, but hide its button!
+const SUPER_ADMIN = { name: 'Super Admin', role: 'superadmin', color: 'bg-red-900 hover:bg-black', iconColor: 'text-red-200' };
 
-// Color palettes for dynamically created users
 const WAITER_COLORS = ['bg-orange-500 hover:bg-orange-600', 'bg-pink-500 hover:bg-pink-600', 'bg-yellow-500 hover:bg-yellow-600', 'bg-red-500 hover:bg-red-600'];
 const CHEF_COLORS = ['bg-blue-500 hover:bg-blue-600', 'bg-cyan-500 hover:bg-cyan-600', 'bg-teal-500 hover:bg-teal-600', 'bg-indigo-500 hover:bg-indigo-600'];
 
@@ -20,6 +21,9 @@ export default function LoginPage() {
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // 🚀 SECRET DOOR STATE
+  const [secretClicks, setSecretClicks] = useState(0);
 
   useEffect(() => {
     fetch('/api/users')
@@ -60,15 +64,40 @@ export default function LoginPage() {
 
   const handlePinClick = (num: number) => { if (pin.length < 4) setPin(prev => prev + num); };
 
+  // 🚀 THE SECRET DOOR FUNCTION
+  const handleSecretTap = () => {
+    const newCount = secretClicks + 1;
+    setSecretClicks(newCount);
+
+    if (newCount >= 5) {
+      setSelectedUser(SUPER_ADMIN); // Opens the Super Admin PIN pad!
+      setPin('');
+      setError('');
+      setSecretClicks(0); // Reset for next time
+    }
+
+    // Reset the counter if they don't tap fast enough (clears after 2 seconds)
+    setTimeout(() => {
+      setSecretClicks(0);
+    }, 2000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      {/* ADDED 'relative' to fix mobile absolute positioning, adjusted min-height for tablets */}
       <div className="relative w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row">
         
         {/* LEFT SIDE: User Selection */}
         <div className={`w-full md:w-3/5 p-6 sm:p-8 md:p-10 transition-all duration-300 overflow-y-auto max-h-[85vh] md:max-h-[800px] ${selectedUser ? 'hidden md:block opacity-30 pointer-events-none blur-[2px]' : 'block'}`}>
           <div className="mb-6 md:mb-8 text-center md:text-left">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2">POS Terminal</h1>
+            
+            {/* 🚀 SECRET TRIGGER APPLIED HERE */}
+            <h1 
+              onClick={handleSecretTap} 
+              className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2 select-none cursor-default"
+            >
+              POS Terminal
+            </h1>
+            
             <p className="text-sm sm:text-base text-slate-500">Select your profile to login</p>
           </div>
 
@@ -80,7 +109,6 @@ export default function LoginPage() {
                 <h2 className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-center md:justify-start gap-2">
                   <ChefHat size={16} /> Kitchen Staff
                 </h2>
-                {/* Responsive Grid: 2 columns on mobile, 2 on tablet, 3 on large screens if needed */}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   {chefs.map((user, index) => {
                     const colorClass = CHEF_COLORS[index % CHEF_COLORS.length];
@@ -115,7 +143,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* 🛡️ MANAGERS SECTION (Super Admin Removed) */}
+            {/* 🛡️ MANAGERS SECTION */}
             <div className="pt-4 border-t">
               <h2 className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 text-center md:text-left">Management</h2>
               <div className="flex gap-4">
@@ -130,14 +158,13 @@ export default function LoginPage() {
 
         {/* RIGHT SIDE: PIN Entry Pad */}
         <div className={`absolute inset-0 h-full bg-white z-20 md:static md:w-2/5 md:bg-slate-50 flex flex-col items-center justify-center p-6 sm:p-8 md:p-10 md:border-l border-slate-200 transition-transform duration-300 ${!selectedUser ? 'translate-x-full md:translate-x-0 md:opacity-50 md:pointer-events-none' : 'translate-x-0 opacity-100'}`}>
-            {/* Back button for mobile */}
             {selectedUser && <button onClick={() => setSelectedUser(null)} className="absolute top-4 left-4 sm:top-6 sm:left-6 p-2 rounded-full bg-slate-100 hover:bg-slate-200 md:hidden"><ChevronLeft size={24} /></button>}
 
             {selectedUser ? (
               <div className="w-full max-w-xs mt-8 md:mt-0">
                 <div className="text-center mb-6 sm:mb-8">
                   <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full mx-auto mb-3 sm:mb-4 flex items-center justify-center text-white shadow-lg ${selectedUser.color}`}>
-                     {selectedUser.role === 'admin' ? <Shield className="w-8 h-8 sm:w-10 sm:h-10" /> : selectedUser.role === 'chef' ? <ChefHat className="w-8 h-8 sm:w-10 sm:h-10" /> : <User className="w-8 h-8 sm:w-10 sm:h-10" />}
+                     {selectedUser.role === 'admin' ? <Shield className="w-8 h-8 sm:w-10 sm:h-10" /> : selectedUser.role === 'superadmin' ? <Crown className="w-8 h-8 sm:w-10 sm:h-10" /> : selectedUser.role === 'chef' ? <ChefHat className="w-8 h-8 sm:w-10 sm:h-10" /> : <User className="w-8 h-8 sm:w-10 sm:h-10" />}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Hello, {selectedUser.name}</h2>
                   <p className="text-xs sm:text-sm text-gray-500 uppercase tracking-widest mt-1 font-semibold">{selectedUser.role}</p>
@@ -151,7 +178,6 @@ export default function LoginPage() {
 
                 <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                    // Responsive button heights
                     <button key={num} onClick={() => handlePinClick(num)} className="h-14 sm:h-16 rounded-2xl bg-white shadow-sm border border-slate-200 text-xl sm:text-2xl font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all">{num}</button>
                   ))}
                   <button onClick={() => setPin('')} className="h-14 sm:h-16 rounded-2xl bg-slate-100 text-slate-500 text-sm sm:text-base font-medium hover:bg-slate-200">CLR</button>
