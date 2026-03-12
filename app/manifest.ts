@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Bill Bhai',
-    short_name: 'Bill Bhai',
+    name: 'KhataPeeta - Smart Restaurant Management System',
+    short_name: 'KhataPeeta',
     description: 'Smart Restaurant Management System',
     start_url: '/',
     display: 'standalone', // This forces the app to open without the browser search bar
