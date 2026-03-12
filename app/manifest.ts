@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'KhataPeeta',
     description: 'Smart Restaurant Management System',
     start_url: '/',
-    display: 'standalone', // This forces the app to open without the browser search bar
+    display: 'standalone', 
     background_color: '#ffffff',
     theme_color: '#f97316',
     icons: [
@@ -23,7 +23,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any'
       },
       {
-        src: '/app-starter.png',
+        src: '/app-starter.png', // <-- THIS WAS MISSING IN YOUR SCREENSHOT!
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable'
