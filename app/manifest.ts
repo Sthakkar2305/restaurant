@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'KhataPeeta - Smart Restaurant Management System',
+    name: 'KhataPeeta',
     short_name: 'KhataPeeta',
     description: 'Smart Restaurant Management System',
     start_url: '/',
