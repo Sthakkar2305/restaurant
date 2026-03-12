@@ -20,19 +20,19 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/app-iogo.png',
+        url: '/app-starter.png',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/app-iogo.png',
+        url: '/app-starter.png',
         media: '(prefers-color-scheme: dark)',
       },
       {
-        url: '/app-iogo.png',
+        url: '/app-starter.png',
         type: 'image/png',
       },
     ],
-    apple: '/apple-app-iogo.png',
+    apple: '/apple-app-starter.png',
   },
 }
 
