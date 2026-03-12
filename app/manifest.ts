@@ -11,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#f97316',
     icons: [
       {
-        src: '/app-starter.png',
+        src: '/icon-912.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any'
@@ -23,7 +23,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any'
       },
       {
-        src: '/app-starter.png', // <-- THIS WAS MISSING IN YOUR SCREENSHOT!
+        src: '/icon-912.png', // <-- THIS WAS MISSING IN YOUR SCREENSHOT!
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable'

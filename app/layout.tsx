@@ -20,19 +20,19 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/app-starter.png',
+        url: '/icon-912.png',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/app-starter.png',
+        url: '/icon-912.png',
         media: '(prefers-color-scheme: dark)',
       },
       {
-        url: '/app-starter.png',
+        url: '/icon-912.png',
         type: 'image/png',
       },
     ],
-    apple: '/apple-app-starter.png',
+    apple: '/apple-icon-912.png',
   },
 }
 
