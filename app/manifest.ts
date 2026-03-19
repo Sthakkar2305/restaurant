@@ -17,7 +17,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any'
       },
       {
-        src: '/app-starter.png',
+        src: '/icon-912.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any'
@@ -29,7 +29,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'maskable'
       },
       {
-        src: '/app-starter.png',
+        src: '/icon-912.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable'
