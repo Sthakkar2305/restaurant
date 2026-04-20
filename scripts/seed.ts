@@ -134,36 +134,45 @@ async function seed() {
 
     const lines = fs.readFileSync(menuPath, 'utf-8').split(/\r?\n/);
     const headers = lines[0].split(',').map(h => clean(h).toUpperCase());
-    const nameIdx = headers.findIndex(h => h.includes('NAME'));
-    const priceIdx = headers.findIndex(h => h.includes('RATE') || h.includes('PRICE'));
-    const catIdx = headers.findIndex(h => h.includes('CATEGORY'));
+    const nameIdx = headers.findIndex(h => h === 'NAME');
+    const priceIdx = headers.findIndex(h => h === 'PRICE');
+    const catIdx = headers.findIndex(h => h === 'CATEGORY');
+    const imgIdx = headers.findIndex(h => h === 'IMAGE');
 
     let updatedCount = 0;
 
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
-      const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(clean);
+      // Handle commas inside quotes properly
+      const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)?.map(clean) || lines[i].split(',').map(clean);
       const name = row[nameIdx];
       const price = parseFloat(row[priceIdx]);
       const category = catIdx > -1 ? row[catIdx] : 'Main Course';
+      let image = imgIdx > -1 ? row[imgIdx] : '';
 
       if (!name || isNaN(price)) continue;
 
-      // Get the perfect image instantly based on the name!
-      const perfectImageUrl = getPerfectImage(name);
+      // Validate image URL
+      const isValidUrl = (string: string) => {
+        try { return Boolean(new URL(string)); }
+        catch (e) { return false; }
+      };
+
+      if (!isValidUrl(image)) {
+        image = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'; // Fallback Placeholder
+      }
 
       const existing = await db.collection('menu_items').findOne({ name });
 
       if (existing) {
-        // Force update the item to use our perfect image
         await db.collection('menu_items').updateOne(
           { _id: existing._id },
-          { $set: { image: perfectImageUrl, updatedAt: new Date() } }
+          { $set: { image, category: category.trim(), price, updatedAt: new Date() } }
         );
       } else {
         await db.collection('menu_items').insertOne({
-          name, category: category.trim() || 'Main Course', price, description: '',
-          image: perfectImageUrl, available: true, createdAt: new Date(), updatedAt: new Date(),
+          name, category: category.trim(), price, description: '',
+          image, available: true, createdAt: new Date(), updatedAt: new Date(),
         });
       }
       updatedCount++;

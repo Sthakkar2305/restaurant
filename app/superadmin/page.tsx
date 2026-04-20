@@ -41,16 +41,31 @@ export default function SuperAdminPage() {
       const waiterSales: Record<string, number> = {};
       const tableSales: Record<string, number> = {};
       let monthlyIncome = 0;
-      const currentMonth = new Date().getMonth();
+      
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      // Debug array for Monthly Income
+      const monthlyIncomeLogs: any[] = [];
 
       paidOrders.forEach((o: any) => {
-          waiterSales[o.waiterName] = (waiterSales[o.waiterName] || 0) + o.total;
-          tableSales[`Table ${o.tableNumber}`] = (tableSales[`Table ${o.tableNumber}`] || 0) + o.total;
+          const orderTotal = parseFloat((o.total || 0).toFixed(2));
+          waiterSales[o.waiterName] = (waiterSales[o.waiterName] || 0) + orderTotal;
+          tableSales[`Table ${o.tableNumber}`] = (tableSales[`Table ${o.tableNumber}`] || 0) + orderTotal;
           
-          if (new Date(o.createdAt).getMonth() === currentMonth) {
-              monthlyIncome += o.total;
+          const orderDate = new Date(o.createdAt);
+          if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) {
+              monthlyIncome += orderTotal;
+              monthlyIncomeLogs.push({ orderId: o.orderId, date: orderDate.toISOString(), total: orderTotal });
           }
       });
+      
+      monthlyIncome = parseFloat(monthlyIncome.toFixed(2));
+      console.log('--- MONTHLY INCOME AUDIT LOG ---');
+      console.log(monthlyIncomeLogs);
+      console.log('Total Monthly Income:', monthlyIncome);
+      console.log('---------------------------------');
 
       setStats({ waiterSales, tableSales, monthlyIncome, allOrders: paidOrders });
 
@@ -87,28 +102,38 @@ export default function SuperAdminPage() {
       if (!stats) return;
       const wb = XLSX.utils.book_new();
       
+      const avgOrderValue = stats.allOrders.length > 0 ? (stats.monthlyIncome / stats.allOrders.length).toFixed(2) : '0.00';
+      const monthName = new Date().toLocaleString('default', { month: 'long' });
+      const year = new Date().getFullYear();
+
       const summaryData = [
+          ['Restaurant Financial Report', ''],
+          ['Month/Year', `${monthName} ${year}`],
+          [],
           ['Metric', 'Value'],
-          ['Total Monthly Income', stats.monthlyIncome],
+          ['Total Revenue', `₹${stats.monthlyIncome}`],
           ['Total Orders', stats.allOrders.length],
+          ['Average Order Value', `₹${avgOrderValue}`],
           [],
           ['Waiter Name', 'Total Sales'],
-          ...Object.entries(stats.waiterSales),
+          ...Object.entries(stats.waiterSales).map(([k, v]) => [k, `₹${v.toFixed(2)}`]),
       ];
       const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+      ws1['!cols'] = [{ wch: 25 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, ws1, "Summary");
 
-      const orderData = stats.allOrders.map(o => ({
-          ID: o.orderId,
-          Date: new Date(o.createdAt).toLocaleDateString(),
-          Table: o.tableNumber,
-          Waiter: o.waiterName,
-          Total: o.total
+      const orderData = stats.allOrders.map((o: any) => ({
+          'Order ID': o.orderId,
+          'Date': new Date(o.createdAt).toLocaleString(),
+          'Items': o.items ? o.items.map((i: any) => `${i.quantity}x ${i.itemName || i.name}`).join(', ') : '',
+          'Total Amount': `₹${parseFloat(o.total || 0).toFixed(2)}`,
+          'Payment Method': o.paymentMethod || 'Cash/Card'
       }));
       const ws2 = XLSX.utils.json_to_sheet(orderData);
-      XLSX.utils.book_append_sheet(wb, ws2, "Order Details");
+      ws2['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 50 }, { wch: 15 }, { wch: 15 }];
+      XLSX.utils.book_append_sheet(wb, ws2, "Orders");
 
-      XLSX.writeFile(wb, "Monthly_Report.xlsx");
+      XLSX.writeFile(wb, `Restaurant_Report_${monthName}_${year}.xlsx`);
   };
 
   // HANDLERS

@@ -4,9 +4,27 @@ import { useEffect, useState } from 'react';
 import { MenuCard } from '@/components/waiter/menu-card';
 import { TableSelector } from '@/components/waiter/table-selector';
 import { OrderSummary, CartItem } from '@/components/waiter/order-summary';
-import { Lock, ArrowUp } from 'lucide-react';
+import { Lock, ArrowUp, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/waiter/Toast'; 
+
+// Highlight Text Helper
+function HighlightText({ text, highlight }: { text: string; highlight: string }) {
+  if (!highlight.trim()) return <span>{text}</span>;
+  const regex = new RegExp(`(${highlight})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <span>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <span key={i} className="bg-yellow-200 text-yellow-900 font-bold">{part}</span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  );
+}
 
 export default function WaiterPage() {
   const router = useRouter();
@@ -26,6 +44,16 @@ export default function WaiterPage() {
   // NEW: Control the mobile cart popup
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce Effect
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   useEffect(() => {
     const init = async () => {
@@ -106,9 +134,11 @@ export default function WaiterPage() {
     finally { setIsSending(false); }
   };
 
-  const filteredItems = selectedCategory
-    ? menu.filter((item) => item.category === selectedCategory)
-    : menu;
+  const filteredItems = menu.filter((item) => {
+    const matchesCat = selectedCategory ? item.category === selectedCategory : true;
+    const matchesSearch = item.name.toLowerCase().includes(debouncedSearch.toLowerCase());
+    return matchesCat && matchesSearch;
+  });
 
   const handleAddToCart = (item: any, quantity: number) => {
     const newCart = new Map(cart);
@@ -193,37 +223,58 @@ export default function WaiterPage() {
              ))}
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map(item => {
-                const itemInCart = cart.get(item._id || item.id);
-                const quantity = itemInCart?.quantity || 0;
-
-                return (
-                <div key={item._id} className={`bg-white rounded-lg shadow overflow-hidden border transition-all ${quantity > 0 ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'}`}>
-                    <div className="h-32 bg-gray-200 relative">
-                        {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
-                        {quantity > 0 && (
-                            <div className="absolute top-2 right-2 bg-orange-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md">
-                                {quantity}
-                            </div>
-                        )}
-                    </div>
-                    <div className="p-3">
-                        <div className="flex justify-between items-start mb-2">
-                            <h3 className="font-bold text-sm line-clamp-1">{item.name}</h3>
-                            <span className="text-orange-600 font-bold">₹{item.price}</span>
-                        </div>
-                        
-                        <button 
-                            onClick={() => handleAddToCart(item, quantity + 1)} 
-                            className="w-full bg-gray-100 hover:bg-orange-100 text-gray-800 hover:text-orange-700 py-2 rounded-md text-sm font-bold transition-colors active:scale-95"
-                        >
-                            {quantity > 0 ? 'Add Another +' : 'Add to Order'}
-                        </button>
-                    </div>
-                </div>
-            )})}
+          <div className="relative">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+             <input
+                 type="text"
+                 placeholder="Search menu items..."
+                 className="w-full bg-white border border-gray-200 rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-sm transition-all"
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 autoComplete="off"
+             />
           </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
+                <p className="text-gray-500 font-medium">No items found matching "{searchQuery}"</p>
+                <button onClick={() => setSearchQuery('')} className="text-orange-600 mt-2 font-bold hover:underline">Clear Search</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredItems.map(item => {
+                  const itemInCart = cart.get(item._id || item.id);
+                  const quantity = itemInCart?.quantity || 0;
+
+                  return (
+                  <div key={item._id || item.id} className={`bg-white rounded-lg shadow overflow-hidden border transition-all ${quantity > 0 ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'}`}>
+                      <div className="h-32 bg-gray-200 relative">
+                          {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
+                          {quantity > 0 && (
+                              <div className="absolute top-2 right-2 bg-orange-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md">
+                                  {quantity}
+                              </div>
+                          )}
+                      </div>
+                      <div className="p-3">
+                          <div className="flex justify-between items-start mb-2">
+                              <h3 className="font-bold text-sm line-clamp-1">
+                                  <HighlightText text={item.name} highlight={debouncedSearch} />
+                              </h3>
+                              <span className="text-orange-600 font-bold">₹{item.price}</span>
+                          </div>
+                          
+                          <button 
+                              onClick={() => handleAddToCart(item, quantity + 1)} 
+                              className="w-full bg-gray-100 hover:bg-orange-100 text-gray-800 hover:text-orange-700 py-2 rounded-md text-sm font-bold transition-colors active:scale-95"
+                          >
+                              {quantity > 0 ? 'Add Another +' : 'Add to Order'}
+                          </button>
+                      </div>
+                  </div>
+              )})}
+            </div>
+          )}
         </div>
 
         {/* Order Summary (Desktop Side / Mobile Modal) */}

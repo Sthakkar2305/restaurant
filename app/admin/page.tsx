@@ -166,12 +166,20 @@ export default function AdminPage() {
 
   const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.status === filter);
 
+  const today = new Date();
+  const isToday = (dateString: string) => {
+    const d = new Date(dateString);
+    return d.getDate() === today.getDate() &&
+           d.getMonth() === today.getMonth() &&
+           d.getFullYear() === today.getFullYear();
+  };
+
   const stats = {
     pending: orders.filter((o) => o.status === 'pending').length,
     preparing: orders.filter((o) => o.status === 'preparing').length,
     served: orders.filter((o) => o.status === 'served').length,
     paid: orders.filter((o) => o.status === 'paid').length,
-    revenue: orders.filter((o) => o.status === 'paid').reduce((sum, o) => sum + (o.total_amount || 0), 0),
+    totalOrdersToday: orders.filter((o) => o.status === 'paid' && isToday(o.created_at)).length,
   };
 
   return (
@@ -195,8 +203,8 @@ export default function AdminPage() {
            <StatBox label="Served" value={stats.served} color="text-green-600" bg="bg-green-50" />
            <StatBox label="Paid" value={stats.paid} color="text-purple-600" bg="bg-purple-50" />
            <div className="bg-gray-900 rounded-lg p-3 text-white">
-              <p className="text-[10px] uppercase opacity-70 font-bold">Total Revenue</p>
-              <p className="text-2xl font-black">₹{stats.revenue.toFixed(0)}</p>
+              <p className="text-[10px] uppercase opacity-70 font-bold tracking-wide">Orders Today</p>
+              <p className="text-2xl font-black">{stats.totalOrdersToday}</p>
            </div>
         </div>
 
