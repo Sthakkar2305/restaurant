@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, TrendingUp, Users, Calendar, LogOut, Plus, Trash2, Download, Table as TableIcon, ChefHat } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Calendar, LogOut, Plus, Trash2, Download, Table as TableIcon, ChefHat, BookOpen, Image as ImageIcon, Edit2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface StatsType {
@@ -14,12 +14,13 @@ interface StatsType {
 
 export default function SuperAdminPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'tables'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'tables' | 'menu'>('dashboard');
   const [stats, setStats] = useState<StatsType | null>(null);
   
   // Combined Waiters and Chefs into one Staff array
   const [staff, setStaff] = useState<any[]>([]); 
   const [tables, setTables] = useState<any[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form States
@@ -29,6 +30,10 @@ export default function SuperAdminPage() {
   
   const [newTableName, setNewTableName] = useState('');
   const [newTableNumber, setNewTableNumber] = useState('');
+
+  // Menu Form States
+  const [menuForm, setMenuForm] = useState({ _id: '', name: '', category: 'main_course', price: '', description: '', image: '', available: true });
+  const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('url');
 
   const refreshData = async () => {
       // 1. Fetch Stats
@@ -78,6 +83,11 @@ export default function SuperAdminPage() {
       const tRes = await fetch('/api/tables');
       const tData = await tRes.json();
       setTables(tData.tables || []);
+
+      // 4. Fetch Menu Items
+      const mRes = await fetch('/api/menu/manage');
+      const mData = await mRes.json();
+      setMenuItems(mData.items || []);
   };
 
   useEffect(() => {
@@ -168,6 +178,45 @@ export default function SuperAdminPage() {
       }
   };
 
+  const handleImageUpload = (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setMenuForm({ ...menuForm, image: reader.result as string });
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const saveMenuItem = async () => {
+      if(!menuForm.name || !menuForm.price || !menuForm.category) return alert("Name, Price, and Category are required");
+      
+      const method = menuForm._id ? 'PUT' : 'POST';
+      const body = JSON.stringify(menuForm);
+      
+      await fetch('/api/menu/manage', { method, body, headers: { 'Content-Type': 'application/json' } });
+      
+      setMenuForm({ _id: '', name: '', category: 'main_course', price: '', description: '', image: '', available: true });
+      refreshData();
+  };
+
+  const deleteMenuItem = async (id: string) => {
+      if(confirm('Delete this menu item?')) {
+          await fetch(`/api/menu/manage?id=${id}`, { method: 'DELETE' });
+          refreshData();
+      }
+  };
+
+  const deleteAllMenuItems = async () => {
+      if(confirm('WARNING: Are you sure you want to delete ALL menu items? This cannot be undone.')) {
+          if(confirm('FINAL CONFIRMATION: Delete EVERYTHING?')) {
+              await fetch('/api/menu/manage?action=deleteAll', { method: 'DELETE' });
+              refreshData();
+          }
+      }
+  };
+
   if (isLoading) return <div className="h-screen flex items-center justify-center bg-gray-950"><Loader2 className="animate-spin text-orange-500" /></div>;
 
   return (
@@ -192,6 +241,7 @@ export default function SuperAdminPage() {
             <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<TrendingUp size={18} />} label="Dashboard" />
             <TabButton active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} icon={<Users size={18} />} label="Manage Staff" />
             <TabButton active={activeTab === 'tables'} onClick={() => setActiveTab('tables')} icon={<TableIcon size={18} />} label="Manage Tables" />
+            <TabButton active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} icon={<BookOpen size={18} />} label="Manage Menu" />
         </div>
 
         {/* CONTENT AREA */}
@@ -286,6 +336,108 @@ export default function SuperAdminPage() {
                         </div>
                     ))}
                 </div>
+            </div>
+        )}
+
+        {activeTab === 'menu' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in">
+                {/* Add/Edit Form */}
+                <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 h-fit">
+                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        {menuForm._id ? <Edit2 size={18} /> : <Plus size={18} />} 
+                        {menuForm._id ? 'Edit Menu Item' : 'Add Menu Item'}
+                    </h3>
+                    <div className="space-y-4">
+                        <input placeholder="Item Name (e.g. Burger)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={menuForm.name} onChange={e => setMenuForm({...menuForm, name: e.target.value})} />
+                        
+                        <div className="flex gap-2">
+                            <select className="w-1/2 bg-gray-800 border border-gray-700 rounded p-2 text-white outline-none" value={menuForm.category} onChange={e => setMenuForm({...menuForm, category: e.target.value})}>
+                                <option value="starters">Starters</option>
+                                <option value="main_course">Main Course</option>
+                                <option value="desserts">Desserts</option>
+                                <option value="drinks">Drinks</option>
+                            </select>
+                            <input placeholder="Price (₹)" type="number" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white" value={menuForm.price} onChange={e => setMenuForm({...menuForm, price: e.target.value})} />
+                        </div>
+
+                        <textarea placeholder="Description (Optional)" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white resize-none" rows={2} value={menuForm.description} onChange={e => setMenuForm({...menuForm, description: e.target.value})} />
+
+                        {/* Image Input Options */}
+                        <div className="p-3 border border-gray-700 rounded bg-gray-800/50">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-bold text-gray-300">Image</span>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setImageInputMode('url')} className={`text-xs px-2 py-1 rounded ${imageInputMode === 'url' ? 'bg-orange-500 text-white' : 'bg-gray-700 text-gray-400'}`}>URL Link</button>
+                                    <button onClick={() => setImageInputMode('upload')} className={`text-xs px-2 py-1 rounded ${imageInputMode === 'upload' ? 'bg-orange-500 text-white' : 'bg-gray-700 text-gray-400'}`}>Upload</button>
+                                </div>
+                            </div>
+                            {imageInputMode === 'url' ? (
+                                <input placeholder="https://...image.jpg" className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm" value={menuForm.image} onChange={e => setMenuForm({...menuForm, image: e.target.value})} />
+                            ) : (
+                                <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600" />
+                            )}
+                            {menuForm.image && imageInputMode === 'upload' && <div className="mt-2 text-xs text-green-400 flex items-center gap-1"><ImageIcon size={12}/> Image uploaded (Base64)</div>}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <input type="checkbox" id="available" checked={menuForm.available} onChange={e => setMenuForm({...menuForm, available: e.target.checked})} className="w-4 h-4 accent-orange-500" />
+                            <label htmlFor="available" className="text-sm cursor-pointer text-gray-300">Available to Order</label>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            {menuForm._id && (
+                                <button onClick={() => setMenuForm({ _id: '', name: '', category: 'main_course', price: '', description: '', image: '', available: true })} className="w-1/3 bg-gray-700 hover:bg-gray-600 py-2 rounded font-bold">Cancel</button>
+                            )}
+                            <button onClick={saveMenuItem} className={`flex-1 ${menuForm._id ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} py-2 rounded font-bold`}>
+                                {menuForm._id ? 'Update Item' : 'Add Item'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* List */}
+                <div className="lg:col-span-2">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-lg text-gray-300">Current Menu Items</h3>
+                        {menuItems.length > 0 && (
+                            <button onClick={deleteAllMenuItems} className="flex items-center gap-1 bg-red-900/50 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors">
+                                <Trash2 size={16} /> Delete All Menu
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {menuItems.map(item => (
+                        <div key={item._id} className={`bg-gray-900 p-4 rounded-xl border flex gap-4 ${item.available ? 'border-gray-800' : 'border-red-900/50 opacity-75'}`}>
+                            {item.image ? (
+                                <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-lg bg-gray-800" />
+                            ) : (
+                                <div className="w-20 h-20 bg-gray-800 rounded-lg flex items-center justify-center text-gray-600"><ImageIcon size={24} /></div>
+                            )}
+                            <div className="flex-1">
+                                <div className="flex justify-between items-start">
+                                    <h4 className="font-bold text-lg leading-tight">{item.name}</h4>
+                                    <span className="font-bold text-orange-400">₹{item.price}</span>
+                                </div>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 uppercase tracking-wider mt-1 inline-block">
+                                    {item.category.replace('_', ' ')}
+                                </span>
+                                <div className="flex justify-end gap-2 mt-3">
+                                    <button onClick={() => {
+                                        setMenuForm({
+                                            _id: item._id, name: item.name, price: item.price.toString(), 
+                                            category: item.category, description: item.description || '', 
+                                            image: item.image || '', available: item.available
+                                        });
+                                        setImageInputMode(item.image?.startsWith('data:image') ? 'upload' : 'url');
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }} className="text-blue-400 hover:bg-blue-400/10 p-2 rounded"><Edit2 size={16} /></button>
+                                    <button onClick={() => deleteMenuItem(item._id)} className="text-red-500 hover:bg-red-500/10 p-2 rounded"><Trash2 size={16} /></button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
             </div>
         )}
 
