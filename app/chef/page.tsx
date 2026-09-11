@@ -357,10 +357,13 @@ export default function ChefKitchenPage() {
                           <h3 className="text-xl sm:text-2xl font-black text-white leading-snug tracking-wide">
                             {item.itemName}
                           </h3>
+                          
+                          {/* 🔥 HUGE HIGH-CONTRAST COOKING INSTRUCTION BADGE FOR CHEF */}
                           {item.notes && (
-                            <p className="text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md inline-block mt-1">
-                              Note: {item.notes}
-                            </p>
+                            <div className="mt-2 py-1.5 px-3 rounded-xl bg-amber-400 text-slate-950 font-black text-sm uppercase tracking-wide border-2 border-amber-300 shadow-md flex items-center gap-2">
+                              <Flame size={18} className="fill-slate-950 text-slate-950 shrink-0" />
+                              <span>INSTRUCTION: {item.notes}</span>
+                            </div>
                           )}
                         </div>
 

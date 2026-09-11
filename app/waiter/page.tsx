@@ -96,7 +96,7 @@ export default function WaiterPage() {
       setCustomerName('');
       setCustomerEmail('');
       setIsCartOpen(false); // Close modal on success
-      setToastMessage(table.status === 'occupied' ? '✅ Order Updated!' : '✅ New Order Sent!');
+      setToastMessage(table.status === 'occupied' ? '✅ Order Updated!' : '✅ New Order Sent to Kitchen!');
       
       const tRes = await fetch('/api/tables');
       const tData = await tRes.json();
@@ -113,10 +113,29 @@ export default function WaiterPage() {
   const handleAddToCart = (item: any, quantity: number) => {
     const newCart = new Map(cart);
     const itemId = item._id || item.id;
-    if (quantity === 0) newCart.delete(itemId);
-    else newCart.set(itemId, { menuItemId: itemId, name: item.name, price: item.price, quantity });
+    if (quantity === 0) {
+      newCart.delete(itemId);
+    } else {
+      const existing = newCart.get(itemId);
+      newCart.set(itemId, {
+        menuItemId: itemId,
+        name: item.name,
+        price: item.price,
+        quantity,
+        notes: existing?.notes || '',
+      });
+    }
     setCart(newCart);
     setToastMessage(`${item.name} added`);
+  };
+
+  const handleUpdateNotes = (menuItemId: string, notes: string) => {
+    const newCart = new Map(cart);
+    const existing = newCart.get(menuItemId);
+    if (existing) {
+      newCart.set(menuItemId, { ...existing, notes });
+      setCart(newCart);
+    }
   };
 
   // Stats for floating bar
@@ -139,86 +158,84 @@ export default function WaiterPage() {
       </header>
 
       <div className="max-w-7xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* Left Side: Tables & Menu */}
         <div className="md:col-span-2 space-y-6">
-          
-          <div className="bg-white p-4 rounded-lg shadow-sm border space-y-3">
-             <h3 className="font-bold text-gray-700">Customer Details</h3>
-             <div className="grid grid-cols-2 gap-4">
-                <input 
-                    placeholder="Name" 
-                    className="border rounded px-3 py-2 w-full"
-                    value={customerName}
-                    onChange={e => setCustomerName(e.target.value)}
-                />
-                <input 
-                    placeholder="Email" 
-                    className="border rounded px-3 py-2 w-full"
-                    value={customerEmail}
-                    onChange={e => setCustomerEmail(e.target.value)}
-                />
-             </div>
+          <TableSelector 
+            tables={tables} 
+            selectedTableId={selectedTableId} 
+            onSelectTable={handleTableSelect}
+            currentUserId={currentUser?.userId} 
+          />
+
+          {selectedTableId && tables.find(t => t._id === selectedTableId)?.status === 'available' && (
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100 flex gap-4">
+                  <input 
+                      type="text" 
+                      placeholder="Customer Name *" 
+                      value={customerName} 
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="border p-2 rounded-lg flex-1 text-sm focus:outline-orange-500"
+                  />
+                  <input 
+                      type="email" 
+                      placeholder="Customer Email (Optional)" 
+                      value={customerEmail} 
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      className="border p-2 rounded-lg flex-1 text-sm focus:outline-orange-500"
+                  />
+              </div>
+          )}
+
+          {/* Categories Horizontal Scroll */}
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`px-4 py-2 rounded-full font-semibold text-sm whitespace-nowrap transition-colors ${
+                selectedCategory === null
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border'
+              }`}
+            >
+              All Items
+            </button>
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
+                className={`px-4 py-2 rounded-full font-semibold text-sm whitespace-nowrap capitalize transition-colors ${
+                  selectedCategory === category.id
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                }`}
+              >
+                {category.name}
+              </button>
+            ))}
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Select Table</h2>
-            <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
-                {tables.map((table) => {
-                    const isOccupiedByOther = table.status === 'occupied' && currentUser && table.currentWaiterId !== currentUser.userId;
-                    const isOccupiedByMe = table.status === 'occupied' && currentUser && table.currentWaiterId === currentUser.userId;
-                    
-                    return (
-                        <button
-                            key={table._id}
-                            onClick={() => handleTableSelect(table._id)}
-                            className={`p-2 rounded-lg font-bold text-sm min-h-[80px] flex flex-col items-center justify-center relative
-                                ${selectedTableId === table._id ? 'bg-orange-600 text-white shadow-lg scale-105' : 
-                                  isOccupiedByMe ? 'bg-blue-100 text-blue-900 border-2 border-blue-500' :
-                                  isOccupiedByOther ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 
-                                  'bg-green-100 text-green-900 hover:bg-green-200'}
-                            `}
-                        >
-                            <span>{table.name || `T-${table.table_number}`}</span>
-                            {isOccupiedByOther && <Lock size={12} className="mt-1" />}
-                            {isOccupiedByMe && <span className="text-[10px] mt-1">My Order</span>}
-                        </button>
-                    )
-                })}
-            </div>
-          </div>
+          {/* Menu Items Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {filteredItems.map((item) => {
+              const itemId = item._id || item.id;
+              const cartItem = cart.get(itemId);
+              const quantity = cartItem?.quantity || 0;
 
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-             <button onClick={() => setSelectedCategory(null)} className={`px-4 py-2 rounded-full whitespace-nowrap ${!selectedCategory ? 'bg-black text-white' : 'bg-white border'}`}>All</button>
-             {categories.map(c => (
-                 <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategory === c.id ? 'bg-black text-white' : 'bg-white border'}`}>{c.name}</button>
-             ))}
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map(item => {
-                const itemInCart = cart.get(item._id || item.id);
-                const quantity = itemInCart?.quantity || 0;
-
-                return (
-                <div key={item._id} className={`bg-white rounded-lg shadow overflow-hidden border transition-all ${quantity > 0 ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'}`}>
-                    <div className="h-32 bg-gray-200 relative">
-                        {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
-                        {quantity > 0 && (
-                            <div className="absolute top-2 right-2 bg-orange-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md">
-                                {quantity}
-                            </div>
-                        )}
+              return (
+                <div key={itemId} className="bg-white rounded-xl shadow-sm overflow-hidden border flex flex-col justify-between p-3">
+                    <div>
+                        <h3 className="font-bold text-sm text-gray-800 line-clamp-1">{item.name}</h3>
+                        <p className="text-orange-600 font-bold text-sm mt-1">₹{item.price}</p>
                     </div>
-                    <div className="p-3">
-                        <div className="flex justify-between items-start mb-2">
-                            <h3 className="font-bold text-sm line-clamp-1">{item.name}</h3>
-                            <span className="text-orange-600 font-bold">₹{item.price}</span>
-                        </div>
-                        
+
+                    <div className="mt-3">
                         <button 
-                            onClick={() => handleAddToCart(item, quantity + 1)} 
-                            className="w-full bg-gray-100 hover:bg-orange-100 text-gray-800 hover:text-orange-700 py-2 rounded-md text-sm font-bold transition-colors active:scale-95"
+                            onClick={() => handleAddToCart(item, quantity + 1)}
+                            className={`w-full py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                quantity > 0 ? 'bg-orange-100 text-orange-700 border border-orange-300' : 'bg-orange-600 text-white hover:bg-orange-700'
+                            }`}
                         >
-                            {quantity > 0 ? 'Add Another +' : 'Add to Order'}
+                            {quantity > 0 ? `Added (${quantity}) +` : 'Add to Order'}
                         </button>
                     </div>
                 </div>
@@ -232,6 +249,7 @@ export default function WaiterPage() {
                 items={Array.from(cart.values())} 
                 selectedTableNumber={tables.find(t => t._id === selectedTableId)?.table_number}
                 onRemoveItem={(id) => { const n = new Map(cart); n.delete(id); setCart(n); }}
+                onUpdateNotes={handleUpdateNotes}
                 onSendOrder={handleSendOrder}
                 isLoading={isSending}
                 isOpen={isCartOpen}
@@ -246,7 +264,7 @@ export default function WaiterPage() {
             <div className="bg-black text-white p-4 rounded-xl shadow-2xl flex items-center justify-between cursor-pointer" onClick={() => setIsCartOpen(true)}>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-400 font-medium">{totalItems} Items Added</span>
-                    <span className="text-lg font-bold">₹{totalPrice.toFixed(0)}</span>
+                    <span className="text-lg font-bold">Rs. {totalPrice.toFixed(0)}</span>
                 </div>
                 
                 <button className="bg-orange-600 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg">
