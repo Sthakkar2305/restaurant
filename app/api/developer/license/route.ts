@@ -3,17 +3,30 @@ import { getCollection } from '@/lib/mongodb';
 
 const DEV_KEY = process.env.DEVELOPER_ADMIN_KEY || 'dev@1234';
 
+interface SystemLicenseDoc {
+  key: string;
+  hotelName: string;
+  expiresAt: string;
+  isManualLock: boolean;
+  contactPhone: string;
+  contactEmail: string;
+  customMessage: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Helper to get or create default license
 async function getLicenseConfig() {
   const collection = await getCollection('system_license');
-  let license = await collection.findOne({ key: 'main_license' });
+  const found = await collection.findOne({ key: 'main_license' });
+  let license: SystemLicenseDoc;
 
-  if (!license) {
+  if (!found) {
     // Default to 1 year from today
     const defaultExpiry = new Date();
     defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
 
-    const defaultDoc = {
+    const defaultDoc: SystemLicenseDoc = {
       key: 'main_license',
       hotelName: 'Restaurant POS',
       expiresAt: defaultExpiry.toISOString(),
@@ -27,6 +40,8 @@ async function getLicenseConfig() {
 
     await collection.insertOne(defaultDoc);
     license = defaultDoc;
+  } else {
+    license = found as unknown as SystemLicenseDoc;
   }
 
   const now = new Date();
