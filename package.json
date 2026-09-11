@@ -7,6 +7,7 @@
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
+    "test": "ts-node scripts/test-remediation.ts",
     "seed": "ts-node scripts/seed.ts"
   },
   "dependencies": {

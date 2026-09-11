@@ -1,7 +1,5 @@
 /**
- * Real-time sync for MongoDB using polling
- * MongoDB doesn't have native WebSocket subscriptions like Supabase,
- * so we use polling with an interval as the fallback mechanism
+ * Real-time sync for MongoDB using smart active-order polling
  */
 
 type OrderChangeCallback = (data: any) => void;
@@ -15,8 +13,8 @@ interface SubscriptionManager {
 const subscriptionManagers = new Map<string, SubscriptionManager>();
 
 /**
- * Setup real-time listener for orders using polling
- * Checks for new/updated orders every 3 seconds
+ * Setup real-time listener for active kitchen/waiter orders
+ * Polls ONLY active orders (pending, preparing, served) every 3 seconds
  */
 export function subscribeToOrders(
   onInsert?: OrderChangeCallback,
@@ -24,7 +22,7 @@ export function subscribeToOrders(
   onDelete?: OrderChangeCallback,
   pollIntervalMs: number = 3000
 ) {
-  const subscriptionId = `orders-${Date.now()}`;
+  const subscriptionId = `orders-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const manager: SubscriptionManager = {
     pollIntervalId: null,
     lastSyncTime: new Date(),
@@ -33,13 +31,14 @@ export function subscribeToOrders(
 
   const pollOrders = async () => {
     try {
-      const response = await fetch('/api/orders');
+      // 🚀 Performance fix: Poll ONLY active orders (status: pending, preparing, served)
+      const response = await fetch('/api/orders?active=true&limit=100');
       if (!response.ok) {
-        console.error('[v0] Failed to poll orders');
         return;
       }
 
-      const { orders } = await response.json();
+      const data = await response.json();
+      const orders = data.orders || [];
 
       // Check for new and updated orders
       const currentOrderIds = new Set<string>();
@@ -51,22 +50,17 @@ export function subscribeToOrders(
         const previousOrder = manager.previousOrders.get(orderId);
 
         if (!previousOrder) {
-          // New order
-          console.log('[v0] New order detected:', order);
           onInsert?.(order);
         } else if (JSON.stringify(previousOrder) !== JSON.stringify(order)) {
-          // Updated order
-          console.log('[v0] Order updated:', order);
           onUpdate?.(order);
         }
 
         manager.previousOrders.set(orderId, order);
       });
 
-      // Check for deleted orders
+      // Check for completed/cancelled/deleted orders
       manager.previousOrders.forEach((order, orderId) => {
         if (!currentOrderIds.has(orderId)) {
-          console.log('[v0] Order deleted:', orderId);
           onDelete?.(order);
           manager.previousOrders.delete(orderId);
         }
@@ -74,7 +68,7 @@ export function subscribeToOrders(
 
       manager.lastSyncTime = new Date();
     } catch (error) {
-      console.error('[v0] Polling error:', error);
+      console.warn('Real-time sync polling notice:', error);
     }
   };
 
@@ -93,7 +87,7 @@ export function subscribeToOrders(
 }
 
 /**
- * Setup real-time listener for specific order
+ * Setup real-time listener for a single specific order
  */
 export function subscribeToOrder(
   orderId: string,
@@ -109,27 +103,24 @@ export function subscribeToOrder(
 
   const pollOrder = async () => {
     try {
-      const response = await fetch(`/api/orders`);
+      // 🚀 Direct single-order fetch instead of scanning all orders
+      const response = await fetch(`/api/orders/${orderId}`);
       if (!response.ok) return;
 
-      const { orders } = await response.json();
-      const order = orders.find(
-        (o: any) => (o._id || o.orderId) === orderId
-      );
-
+      const data = await response.json();
+      const order = data.order;
       if (!order) return;
 
       const previousOrder = manager.previousOrders.get(orderId);
 
       if (!previousOrder || JSON.stringify(previousOrder) !== JSON.stringify(order)) {
-        console.log('[v0] Order details updated:', order);
         onUpdate?.(order);
         manager.previousOrders.set(orderId, order);
       }
 
       manager.lastSyncTime = new Date();
     } catch (error) {
-      console.error('[v0] Polling error:', error);
+      console.warn('Single-order polling notice:', error);
     }
   };
 
@@ -148,7 +139,7 @@ export function subscribeToOrder(
 }
 
 /**
- * Unsubscribe from polling
+ * Unsubscribe from polling channel
  */
 export function unsubscribeFromChannel(subscriptionId: string) {
   const manager = subscriptionManagers.get(subscriptionId);
@@ -157,7 +148,6 @@ export function unsubscribeFromChannel(subscriptionId: string) {
       clearInterval(manager.pollIntervalId);
     }
     subscriptionManagers.delete(subscriptionId);
-    console.log('[v0] Unsubscribed from:', subscriptionId);
   }
 }
 
@@ -165,11 +155,10 @@ export function unsubscribeFromChannel(subscriptionId: string) {
  * Unsubscribe all active subscriptions
  */
 export function unsubscribeAll() {
-  subscriptionManagers.forEach((manager, subscriptionId) => {
+  subscriptionManagers.forEach((manager) => {
     if (manager.pollIntervalId) {
       clearInterval(manager.pollIntervalId);
     }
   });
   subscriptionManagers.clear();
-  console.log('[v0] Unsubscribed from all channels');
 }

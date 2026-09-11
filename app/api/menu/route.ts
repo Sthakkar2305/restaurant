@@ -12,24 +12,21 @@ export async function GET() {
       .sort({ category: 1, name: 1 })
       .toArray()) as MenuItem[];
 
-    // Group items by category for easier display
-    const categories = [
-      'starters',
-      'main_course',
-      'desserts',
-      'drinks',
-    ];
+    // Dynamically retrieve unique categories from actual database items
+    const uniqueCategories = Array.from(
+      new Set(items.map((i) => i.category || 'general'))
+    );
 
-    const groupedItems = categories.reduce(
+    const groupedItems = uniqueCategories.reduce(
       (acc, cat) => {
-        acc[cat] = items.filter((item) => item.category === cat);
+        acc[cat] = items.filter((item) => (item.category || 'general') === cat);
         return acc;
       },
       {} as Record<string, MenuItem[]>
     );
 
     return NextResponse.json({
-      categories: categories.map((cat) => ({
+      categories: uniqueCategories.map((cat) => ({
         id: cat,
         name: cat
           .split('_')

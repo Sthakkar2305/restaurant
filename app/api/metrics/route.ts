@@ -1,31 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
 import { Order } from '@/lib/schemas';
-
-async function getSessionUser(request: NextRequest) {
-  const sessionId = request.cookies.get('sessionId')?.value;
-  if (!sessionId) return null;
-
-  const sessionsCollection = await getCollection('sessions');
-  const session = await sessionsCollection.findOne({ sessionId });
-  return session;
-}
+import { requireAdmin } from '@/lib/api-helpers';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getSessionUser(request);
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Only admins can view metrics
-    if (session.userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
 
     // Get orders from today
     const today = new Date();
@@ -38,13 +19,11 @@ export async function GET(request: NextRequest) {
 
     // Calculate metrics
     const totalOrders = orders.length;
-    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+    const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const paidOrders = orders.filter((o) => o.status === 'paid').length;
+    const paidOrders = orders.filter((o) => o.status === 'paid' || o.paymentStatus === 'paid').length;
     const pendingOrders = orders.filter((o) => o.status === 'pending').length;
-    const preparingOrders = orders.filter(
-      (o) => o.status === 'preparing'
-    ).length;
+    const preparingOrders = orders.filter((o) => o.status === 'preparing').length;
     const servedOrders = orders.filter((o) => o.status === 'served').length;
 
     return NextResponse.json({

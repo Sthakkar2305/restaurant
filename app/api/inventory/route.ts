@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getCollection } from '@/lib/mongodb';
+import { requireAdmin } from '@/lib/api-helpers';
 
 // Default initial inventory items for restaurant
 const DEFAULT_STOCK_ITEMS = [
@@ -17,9 +18,12 @@ const DEFAULT_STOCK_ITEMS = [
   { name: 'Takeaway Packaging Boxes', category: 'Packaging', quantity: 150, unit: 'pieces', minLevel: 50, costPrice: 6, supplier: 'Eco Pack Co.' },
 ];
 
-// GET: List all inventory items with valuation & low-stock alerts
-export async function GET() {
+// GET: List all inventory items (ADMIN / SUPERADMIN ONLY)
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const inventoryCollection = await getCollection('inventory_items');
     let items = await inventoryCollection.find({}).sort({ category: 1, name: 1 }).toArray();
 
@@ -55,9 +59,12 @@ export async function GET() {
   }
 }
 
-// POST: Add new inventory item
+// POST: Add new inventory item (ADMIN / SUPERADMIN ONLY)
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { name, category, quantity, unit, minLevel, costPrice, supplier } = await request.json();
 
     if (!name || quantity === undefined) {
@@ -67,13 +74,13 @@ export async function POST(request: NextRequest) {
     const inventoryCollection = await getCollection('inventory_items');
 
     const newItem = {
-      name: name.trim(),
-      category: category || 'General',
-      quantity: Number(quantity) || 0,
-      unit: unit || 'kg',
-      minLevel: Number(minLevel) || 10,
-      costPrice: Number(costPrice) || 0,
-      supplier: supplier || '',
+      name: String(name).trim(),
+      category: category ? String(category).trim() : 'General',
+      quantity: Math.max(0, Number(quantity) || 0),
+      unit: unit ? String(unit).trim() : 'kg',
+      minLevel: Math.max(0, Number(minLevel) || 10),
+      costPrice: Math.max(0, Number(costPrice) || 0),
+      supplier: supplier ? String(supplier).trim() : '',
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -87,9 +94,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT: Update inventory item
+// PUT: Update inventory item (ADMIN / SUPERADMIN ONLY)
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { id, name, category, quantity, unit, minLevel, costPrice, supplier } = await request.json();
 
     if (!id) {
@@ -99,18 +109,22 @@ export async function PUT(request: NextRequest) {
     const inventoryCollection = await getCollection('inventory_items');
     const updateDoc: any = { updatedAt: new Date() };
 
-    if (name) updateDoc.name = name.trim();
-    if (category) updateDoc.category = category;
-    if (quantity !== undefined) updateDoc.quantity = Number(quantity);
-    if (unit) updateDoc.unit = unit;
-    if (minLevel !== undefined) updateDoc.minLevel = Number(minLevel);
-    if (costPrice !== undefined) updateDoc.costPrice = Number(costPrice);
-    if (supplier !== undefined) updateDoc.supplier = supplier;
+    if (name) updateDoc.name = String(name).trim();
+    if (category) updateDoc.category = String(category).trim();
+    if (quantity !== undefined) updateDoc.quantity = Math.max(0, Number(quantity));
+    if (unit) updateDoc.unit = String(unit).trim();
+    if (minLevel !== undefined) updateDoc.minLevel = Math.max(0, Number(minLevel));
+    if (costPrice !== undefined) updateDoc.costPrice = Math.max(0, Number(costPrice));
+    if (supplier !== undefined) updateDoc.supplier = String(supplier).trim();
 
-    const result = await inventoryCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateDoc }
-    );
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await inventoryCollection.updateOne(query, { $set: updateDoc });
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
@@ -123,9 +137,12 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Delete stock item
+// DELETE: Delete stock item (ADMIN / SUPERADMIN ONLY)
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -134,7 +151,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     const inventoryCollection = await getCollection('inventory_items');
-    const result = await inventoryCollection.deleteOne({ _id: new ObjectId(id) });
+
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await inventoryCollection.deleteOne(query);
 
     if (result.deletedCount === 0) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });

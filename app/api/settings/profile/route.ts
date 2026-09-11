@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
+import { requireAdmin } from '@/lib/api-helpers';
 
-// GET: Fetch restaurant profile settings
+// GET: Fetch restaurant profile settings (Public for receipt & invoice branding)
 export async function GET() {
   try {
     const settingsCollection = await getCollection('restaurant_profile');
@@ -40,9 +41,12 @@ export async function GET() {
   }
 }
 
-// POST: Save or update restaurant profile settings
+// POST: Save or update restaurant profile settings (ADMIN / SUPERADMIN ONLY)
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const body = await request.json();
     const {
       restaurantName,
@@ -56,22 +60,22 @@ export async function POST(request: NextRequest) {
       gstPercent,
     } = body;
 
-    if (!restaurantName || !restaurantName.trim()) {
+    if (!restaurantName || !String(restaurantName).trim()) {
       return NextResponse.json({ error: 'Restaurant Name is required' }, { status: 400 });
     }
 
     const settingsCollection = await getCollection('restaurant_profile');
 
     const updateDoc = {
-      restaurantName: restaurantName.trim(),
-      tagline: tagline || '',
-      address: address || '',
-      phone: phone || '',
-      email: email || '',
-      gstin: gstin || '',
-      fssai: fssai || '',
-      serviceChargePercent: Number(serviceChargePercent ?? 10),
-      gstPercent: Number(gstPercent ?? 5),
+      restaurantName: String(restaurantName).trim().slice(0, 100),
+      tagline: tagline ? String(tagline).trim().slice(0, 150) : '',
+      address: address ? String(address).trim().slice(0, 250) : '',
+      phone: phone ? String(phone).trim().slice(0, 30) : '',
+      email: email ? String(email).trim().slice(0, 100) : '',
+      gstin: gstin ? String(gstin).trim().slice(0, 30) : '',
+      fssai: fssai ? String(fssai).trim().slice(0, 30) : '',
+      serviceChargePercent: Math.max(0, Math.min(30, Number(serviceChargePercent ?? 10))),
+      gstPercent: Math.max(0, Math.min(30, Number(gstPercent ?? 5))),
       updatedAt: new Date().toISOString(),
     };
 

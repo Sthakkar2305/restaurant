@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getCollection } from '@/lib/mongodb';
+import { requireAdmin, requireStaff } from '@/lib/api-helpers';
 
 // GET: List all menu items including unavailable items for management
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireStaff(request);
+    if (auth.response) return auth.response;
+
     const menuCollection = await getCollection('menu_items');
     const items = await menuCollection.find({}).sort({ category: 1, name: 1 }).toArray();
 
-    // Get unique categories
+    // Dynamically retrieve unique categories
     const categories = Array.from(new Set(items.map((i) => i.category || 'general')));
 
     return NextResponse.json({ success: true, items, categories });
@@ -18,23 +22,31 @@ export async function GET() {
   }
 }
 
-// POST: Add new menu item
+// POST: Add new menu item (ADMIN / SUPERADMIN ONLY)
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { name, category, price, description, foodType = 'veg', available = true, image } = await request.json();
 
     if (!name || price === undefined) {
       return NextResponse.json({ error: 'Name and price are required' }, { status: 400 });
     }
 
+    const numPrice = Number(price);
+    if (isNaN(numPrice) || numPrice < 0) {
+      return NextResponse.json({ error: 'Price must be a valid non-negative number' }, { status: 400 });
+    }
+
     const menuCollection = await getCollection('menu_items');
 
     const newItem = {
-      name,
-      category: category ? category.toLowerCase().replace(/\s+/g, '_') : 'general',
-      price: Number(price),
-      description: description || '',
-      foodType,
+      name: String(name).trim(),
+      category: category ? String(category).toLowerCase().replace(/\s+/g, '_') : 'general',
+      price: numPrice,
+      description: description ? String(description).slice(0, 500) : '',
+      foodType: ['veg', 'non-veg', 'egg', 'beverage'].includes(foodType) ? foodType : 'veg',
       available: Boolean(available),
       image: image || '/placeholder.jpg',
       createdAt: new Date(),
@@ -50,9 +62,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT: Update existing menu item
+// PUT: Update existing menu item (ADMIN / SUPERADMIN ONLY)
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { id, name, category, price, description, foodType, available, image } = await request.json();
 
     if (!id) {
@@ -60,22 +75,30 @@ export async function PUT(request: NextRequest) {
     }
 
     const menuCollection = await getCollection('menu_items');
-    const updateDoc: any = {
-      updatedAt: new Date(),
-    };
+    const updateDoc: any = { updatedAt: new Date() };
 
-    if (name) updateDoc.name = name;
-    if (category) updateDoc.category = category.toLowerCase().replace(/\s+/g, '_');
-    if (price !== undefined) updateDoc.price = Number(price);
-    if (description !== undefined) updateDoc.description = description;
-    if (foodType) updateDoc.foodType = foodType;
+    if (name) updateDoc.name = String(name).trim();
+    if (category) updateDoc.category = String(category).toLowerCase().replace(/\s+/g, '_');
+    if (price !== undefined) {
+      const p = Number(price);
+      if (isNaN(p) || p < 0) {
+        return NextResponse.json({ error: 'Price must be a valid non-negative number' }, { status: 400 });
+      }
+      updateDoc.price = p;
+    }
+    if (description !== undefined) updateDoc.description = String(description).slice(0, 500);
+    if (foodType && ['veg', 'non-veg', 'egg', 'beverage'].includes(foodType)) updateDoc.foodType = foodType;
     if (available !== undefined) updateDoc.available = Boolean(available);
     if (image !== undefined) updateDoc.image = image;
 
-    const result = await menuCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateDoc }
-    );
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await menuCollection.updateOne(query, { $set: updateDoc });
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
@@ -88,9 +111,12 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Delete menu item
+// DELETE: Delete menu item (ADMIN / SUPERADMIN ONLY)
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -99,7 +125,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     const menuCollection = await getCollection('menu_items');
-    const result = await menuCollection.deleteOne({ _id: new ObjectId(id) });
+
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await menuCollection.deleteOne(query);
 
     if (result.deletedCount === 0) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });

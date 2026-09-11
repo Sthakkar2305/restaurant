@@ -98,8 +98,10 @@ export default function SuperAdminPage() {
         const authRes = await fetch('/api/auth/me');
         if (authRes.ok) {
           const user = await authRes.json();
-          if (user.role !== 'superadmin' && user.role !== 'admin') {
-            router.push('/');
+          if (user.role !== 'superadmin') {
+            if (user.role === 'admin') router.push('/admin');
+            else if (user.role === 'chef') router.push('/chef');
+            else router.push('/waiter');
             return;
           }
           if (user.name) setAdminName(user.name);

@@ -1,27 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import QRCode from 'qrcode';
+import { ObjectId } from 'mongodb';
 import { getCollection } from '@/lib/mongodb';
 import { Order } from '@/lib/schemas';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { orderId } = await request.json();
 
-    // Fetch order details
-    const ordersCollection = await getCollection('orders');
-    const order = (await ordersCollection.findOne({
-      orderId,
-    })) as Order | null;
-
-    if (!order) {
-      return NextResponse.json(
-        { error: 'Order not found' },
-        { status: 404 }
-      );
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
-    // Create UPI string for QR code
-    const upiString = `upi://pay?pa=${process.env.NEXT_PUBLIC_UPI_ID || 'restaurant@upi'}&pn=RestaurantOrder&am=${order.total}&tr=${orderId}&tn=Order%20%23${orderId}`;
+    const ordersCollection = await getCollection('orders');
+
+    let query: any;
+    try {
+      query = { _id: new ObjectId(orderId) };
+    } catch {
+      query = { orderId };
+    }
+
+    const order = (await ordersCollection.findOne(query)) as Order | null;
+
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    const upiId = process.env.NEXT_PUBLIC_UPI_ID || 'restaurant@upi';
+    const amount = Number(order.total) || 0;
+    const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=RestaurantOrder&am=${amount.toFixed(2)}&tr=${encodeURIComponent(order.orderId)}&tn=Order%20%23${encodeURIComponent(order.orderId)}`;
 
     // Generate QR code
     const qrCodeDataUrl = await QRCode.toDataURL(upiString, {
@@ -32,26 +40,17 @@ export async function POST(request: Request) {
       width: 300,
     });
 
-    // Update order with QR code
-    await ordersCollection.updateOne(
-      { orderId },
-      {
-        $set: {
-          qrCodeData: qrCodeDataUrl,
-          updatedAt: new Date(),
-        },
-      }
-    );
-
     return NextResponse.json({
       success: true,
       qrCode: qrCodeDataUrl,
-      amount: order.total,
+      amount,
+      orderId: order.orderId,
+      status: 'initiated',
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('QR code generation error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate QR code' },
+      { error: error.message || 'Failed to generate QR code' },
       { status: 500 }
     );
   }

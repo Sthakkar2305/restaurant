@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getCollection } from '@/lib/mongodb';
+import { requireAdmin } from '@/lib/api-helpers';
 
-// POST: Add new table
+// POST: Add new table (ADMIN / SUPERADMIN ONLY)
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { name, number, capacity = 4, section = 'Main Hall' } = await request.json();
     const tablesCollection = await getCollection('tables');
 
     const tableNumber = parseInt(String(number), 10);
-    if (isNaN(tableNumber)) {
-      return NextResponse.json({ error: 'Valid table number required' }, { status: 400 });
+    if (isNaN(tableNumber) || tableNumber <= 0) {
+      return NextResponse.json({ error: 'Valid positive table number is required' }, { status: 400 });
     }
 
     // Check if table number already exists
@@ -20,10 +24,10 @@ export async function POST(request: NextRequest) {
     }
 
     const newTable = {
-      name: name || `Table ${tableNumber}`,
+      name: name ? String(name).trim() : `Table ${tableNumber}`,
       table_number: tableNumber,
       seating_capacity: parseInt(String(capacity), 10) || 4,
-      section: section || 'Main Hall',
+      section: section ? String(section).trim() : 'Main Hall',
       status: 'available',
       currentWaiterId: null,
       createdAt: new Date(),
@@ -39,9 +43,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT: Update existing table
+// PUT: Update existing table (ADMIN / SUPERADMIN ONLY)
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { id, name, number, capacity, section, status } = await request.json();
 
     if (!id) {
@@ -49,23 +56,25 @@ export async function PUT(request: NextRequest) {
     }
 
     const tablesCollection = await getCollection('tables');
-    const updateDoc: any = {
-      updatedAt: new Date(),
-    };
+    const updateDoc: any = { updatedAt: new Date() };
 
-    if (name) updateDoc.name = name;
+    if (name) updateDoc.name = String(name).trim();
     if (number !== undefined) updateDoc.table_number = parseInt(String(number), 10);
     if (capacity !== undefined) updateDoc.seating_capacity = parseInt(String(capacity), 10);
-    if (section !== undefined) updateDoc.section = section;
+    if (section !== undefined) updateDoc.section = String(section).trim();
     if (status !== undefined) {
       updateDoc.status = status;
       if (status === 'available') updateDoc.currentWaiterId = null;
     }
 
-    const result = await tablesCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateDoc }
-    );
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await tablesCollection.updateOne(query, { $set: updateDoc });
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: 'Table not found' }, { status: 404 });
@@ -78,9 +87,12 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Delete table
+// DELETE: Delete table (ADMIN / SUPERADMIN ONLY)
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -89,7 +101,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     const tablesCollection = await getCollection('tables');
-    const result = await tablesCollection.deleteOne({ _id: new ObjectId(id) });
+
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await tablesCollection.deleteOne(query);
 
     if (result.deletedCount === 0) {
       return NextResponse.json({ error: 'Table not found' }, { status: 404 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
+import { requireAdmin } from '@/lib/api-helpers';
 
-// Helper to filter orders by date range
 function getDateBounds(range: string, fromDate?: string, toDate?: string) {
   const now = new Date();
   let start = new Date();
@@ -29,7 +29,6 @@ function getDateBounds(range: string, fromDate?: string, toDate?: string) {
     end = toDate ? new Date(toDate) : new Date();
     end.setHours(23, 59, 59, 999);
   } else {
-    // Default last 30 days
     start.setDate(now.getDate() - 29);
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
@@ -40,20 +39,20 @@ function getDateBounds(range: string, fromDate?: string, toDate?: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const range = searchParams.get('range') || 'last7days';
     const fromDate = searchParams.get('fromDate') || undefined;
     const toDate = searchParams.get('toDate') || undefined;
-    const reportId = searchParams.get('reportId') || 'sales_summary';
 
     const { start, end } = getDateBounds(range, fromDate, toDate);
 
     const ordersCollection = await getCollection('orders');
     const menuCollection = await getCollection('menu_items');
-    const usersCollection = await getCollection('users');
-    const tablesCollection = await getCollection('tables');
 
-    // Fetch orders within date range
+    // Fetch orders within indexed date range
     const orders = await ordersCollection
       .find({
         createdAt: { $gte: start, $lte: end },
@@ -62,8 +61,6 @@ export async function GET(request: NextRequest) {
       .toArray();
 
     const allMenuItems = await menuCollection.find({}).toArray();
-    const allUsers = await usersCollection.find({}, { projection: { pinHash: 0 } }).toArray();
-    const allTables = await tablesCollection.find({}).toArray();
 
     const paidOrders = orders.filter((o) => o.status === 'paid' || o.paymentStatus === 'paid');
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
@@ -90,18 +87,15 @@ export async function GET(request: NextRequest) {
       split: { mode: 'Split Payment', count: 0, total: 0 },
     };
 
-    // Hourly distribution (0 to 23)
     const hourlySales: { hour: string; sales: number; orders: number }[] = Array.from({ length: 24 }, (_, i) => ({
       hour: `${i.toString().padStart(2, '0')}:00`,
       sales: 0,
       orders: 0,
     }));
 
-    // Day-wise distribution
     const daySalesMap: Record<string, { date: string; gross: number; net: number; tax: number; orders: number }> = {};
 
     paidOrders.forEach((o) => {
-      // Day grouping
       const dateStr = new Date(o.createdAt).toISOString().split('T')[0];
       if (!daySalesMap[dateStr]) {
         daySalesMap[dateStr] = { date: dateStr, gross: 0, net: 0, tax: 0, orders: 0 };
@@ -111,14 +105,12 @@ export async function GET(request: NextRequest) {
       daySalesMap[dateStr].tax += o.tax || 0;
       daySalesMap[dateStr].orders += 1;
 
-      // Hourly grouping
       const hour = new Date(o.createdAt).getHours();
       if (hourlySales[hour]) {
         hourlySales[hour].sales += o.total || 0;
         hourlySales[hour].orders += 1;
       }
 
-      // Waiter grouping
       const waiter = o.waiterName || 'Staff';
       if (!waiterSalesMap[waiter]) {
         waiterSalesMap[waiter] = { name: waiter, revenue: 0, orders: 0, aov: 0 };
@@ -126,7 +118,6 @@ export async function GET(request: NextRequest) {
       waiterSalesMap[waiter].revenue += o.total || 0;
       waiterSalesMap[waiter].orders += 1;
 
-      // Table grouping
       const tNum = o.tableNumber || 0;
       const tKey = `Table ${tNum}`;
       if (!tableSalesMap[tKey]) {
@@ -135,7 +126,6 @@ export async function GET(request: NextRequest) {
       tableSalesMap[tKey].revenue += o.total || 0;
       tableSalesMap[tKey].orders += 1;
 
-      // Payment mode grouping
       const pMode = (o.paymentMethod || 'cash').toLowerCase();
       if (paymentModeMap[pMode]) {
         paymentModeMap[pMode].count += 1;
@@ -145,7 +135,6 @@ export async function GET(request: NextRequest) {
         paymentModeMap['cash'].total += o.total || 0;
       }
 
-      // Items aggregation
       if (Array.isArray(o.items)) {
         o.items.forEach((item: any) => {
           const iName = item.itemName || 'Item';
@@ -168,7 +157,6 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Calculate waiter AOVs
     Object.values(waiterSalesMap).forEach((w) => {
       w.aov = w.orders > 0 ? Math.round(w.revenue / w.orders) : 0;
     });
@@ -196,7 +184,6 @@ export async function GET(request: NextRequest) {
 
     // Petpooja 80 Report Catalog Definition
     const reportCatalog = [
-      // Sales & Revenue (1 - 20)
       { id: 'daily_z_report', name: '1. Daily Day-Close Z-Report', category: 'Sales & Revenue' },
       { id: 'day_wise_sales', name: '2. Day-wise Net & Gross Sales', category: 'Sales & Revenue' },
       { id: 'hourly_peak_sales', name: '3. Hourly Sales & Peak Hour Trend', category: 'Sales & Revenue' },
@@ -217,8 +204,6 @@ export async function GET(request: NextRequest) {
       { id: 'split_payment_audit', name: '18. Split Bill & Multi-tender Report', category: 'Sales & Revenue' },
       { id: 'refund_analysis', name: '19. Refund & Return Analysis', category: 'Sales & Revenue' },
       { id: 'executive_kpi_report', name: '20. Executive Top-Level KPI Summary', category: 'Sales & Revenue' },
-
-      // Menu & Product (21 - 40)
       { id: 'top_items_quantity', name: '21. Top 20 Selling Items (Quantity)', category: 'Menu & Product' },
       { id: 'top_items_revenue', name: '22. Top 20 Revenue Generating Dishes', category: 'Menu & Product' },
       { id: 'category_contribution', name: '23. Category Contribution % Matrix', category: 'Menu & Product' },
@@ -239,8 +224,6 @@ export async function GET(request: NextRequest) {
       { id: 'special_dish_report', name: '38. Chef Special Item Performance', category: 'Menu & Product' },
       { id: 'low_volume_high_price', name: '39. Premium Low Volume Dish Report', category: 'Menu & Product' },
       { id: 'menu_engineering_matrix', name: '40. Menu Engineering Stars & Dogs Matrix', category: 'Menu & Product' },
-
-      // Staff & Operations (41 - 60)
       { id: 'waiter_leaderboard', name: '41. Waiter Performance & Sales Rank', category: 'Staff & Operations' },
       { id: 'waiter_order_count', name: '42. Waiter Order Processing Volume', category: 'Staff & Operations' },
       { id: 'waiter_aov_index', name: '43. Waiter Average Ticket Size (AOV)', category: 'Staff & Operations' },
@@ -261,8 +244,6 @@ export async function GET(request: NextRequest) {
       { id: 'unassigned_orders_log', name: '58. Unassigned / System Order Log', category: 'Staff & Operations' },
       { id: 'cross_waiter_handover', name: '59. Shift Handover Order Transfer Log', category: 'Staff & Operations' },
       { id: 'operational_bottleneck', name: '60. Operational Speed & SLA Bottlenecks', category: 'Staff & Operations' },
-
-      // Taxes, GST & Audit (61 - 70)
       { id: 'gstr1_summary', name: '61. GSTR-1 Monthly Taxable Summary', category: 'Taxes & Audit' },
       { id: 'cgst_sgst_ledger', name: '62. CGST (2.5%) & SGST (2.5%) Ledger', category: 'Taxes & Audit' },
       { id: 'bill_reprint_audit', name: '63. Bill Reprint & Duplicate Invoice Log', category: 'Taxes & Audit' },
@@ -273,8 +254,6 @@ export async function GET(request: NextRequest) {
       { id: 'invoice_sequence_audit', name: '68. Invoice Number Sequence Continuity', category: 'Taxes & Audit' },
       { id: 'manager_override_log', name: '69. Manager Security Override Log', category: 'Taxes & Audit' },
       { id: 'complimentary_food_tax', name: '70. Complimentary Food Value & Tax Loss', category: 'Taxes & Audit' },
-
-      // Operations & Tables (71 - 80)
       { id: 'table_occupancy_rate', name: '71. Table Occupancy Rate & Turn Count', category: 'Tables & Day-Close' },
       { id: 'seating_capacity_apc', name: '72. Average Spend Per Cover (APC)', category: 'Tables & Day-Close' },
       { id: 'peak_hour_utilization', name: '73. Peak Hour Seating Capacity Load', category: 'Tables & Day-Close' },

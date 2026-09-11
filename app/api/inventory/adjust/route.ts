@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getCollection } from '@/lib/mongodb';
+import { requireAdmin } from '@/lib/api-helpers';
 
-// POST: Adjust stock level (+ inward or - outward)
+// POST: Adjust stock level (+ inward or - outward) (ADMIN / SUPERADMIN ONLY)
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     const { id, type, amount, reason } = await request.json();
 
     if (!id || amount === undefined) {
@@ -22,15 +26,23 @@ export async function POST(request: NextRequest) {
     const inventoryCollection = await getCollection('inventory_items');
     const transactionsCollection = await getCollection('inventory_transactions');
 
-    const item = await inventoryCollection.findOne({ _id: new ObjectId(id) });
+    let query: any;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const item = await inventoryCollection.findOne(query);
     if (!item) {
       return NextResponse.json({ error: 'Stock item not found' }, { status: 404 });
     }
 
-    const newQuantity = Math.max(0, (Number(item.quantity) || 0) + netChange);
+    const currentQty = Number(item.quantity) || 0;
+    const newQuantity = Math.max(0, currentQty + netChange);
 
     await inventoryCollection.updateOne(
-      { _id: new ObjectId(id) },
+      query,
       { $set: { quantity: newQuantity, updatedAt: new Date() } }
     );
 
@@ -40,10 +52,11 @@ export async function POST(request: NextRequest) {
       itemName: item.name,
       type: type === 'outward' ? 'outward' : 'inward',
       amount: qtyChange,
-      previousQuantity: item.quantity,
+      previousQuantity: currentQty,
       newQuantity,
       unit: item.unit,
-      reason: reason || (type === 'outward' ? 'Kitchen Usage / Wastage' : 'Stock Purchase Inward'),
+      adjustedBy: auth.user?.name || 'Admin',
+      reason: reason ? String(reason).slice(0, 200) : (type === 'outward' ? 'Kitchen Usage / Wastage' : 'Stock Purchase Inward'),
       createdAt: new Date(),
     });
 

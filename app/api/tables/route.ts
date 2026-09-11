@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { ObjectId } from 'mongodb';
 import { getCollection } from '@/lib/mongodb';
 import { Table } from '@/lib/schemas';
+import { requireStaff } from '@/lib/api-helpers';
 
 export async function GET() {
   try {
@@ -12,6 +14,7 @@ export async function GET() {
       .toArray()) as Table[];
 
     return NextResponse.json({
+      success: true,
       tables,
     });
   } catch (error) {
@@ -23,21 +26,32 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireStaff(request);
+    if (auth.response) return auth.response;
+
     const { tableId, status } = await request.json();
+
+    if (!tableId || !status) {
+      return NextResponse.json({ error: 'tableId and status are required' }, { status: 400 });
+    }
 
     const tablesCollection = await getCollection('tables');
 
-    const result = await tablesCollection.updateOne(
-      { _id: tableId },
-      {
-        $set: {
-          status,
-          updatedAt: new Date(),
-        },
-      }
-    );
+    let query: any;
+    try {
+      query = { _id: new ObjectId(tableId) };
+    } catch {
+      query = { _id: tableId };
+    }
+
+    const updateData: any = { status, updatedAt: new Date() };
+    if (status === 'available') {
+      updateData.currentWaiterId = null;
+    }
+
+    const result = await tablesCollection.updateOne(query, { $set: updateData });
 
     if (result.matchedCount === 0) {
       return NextResponse.json(

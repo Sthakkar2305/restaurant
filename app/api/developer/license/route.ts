@@ -1,7 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
-
-const DEV_KEY = process.env.DEVELOPER_ADMIN_KEY || 'dev@1234';
+import { checkRateLimit } from '@/lib/api-helpers';
 
 interface SystemLicenseDoc {
   key: string;
@@ -63,7 +62,7 @@ async function getLicenseConfig() {
   };
 }
 
-// GET: Check system license status (Public for license guard)
+// GET: Check system license status (Public for client-side license guard)
 export async function GET() {
   try {
     const license = await getLicenseConfig();
@@ -82,18 +81,38 @@ export async function GET() {
         contactPhone: '',
         contactEmail: '',
         customMessage: '',
-      }
+      },
     });
   }
 }
 
-// POST: Update license settings (Protected by Developer Key)
-export async function POST(req: Request) {
+// POST: Update license settings (STRICTLY PROTECTED BY DEVELOPER KEY WITH RATE LIMITING)
+export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '127.0.0.1';
+
+    // Rate limit: 5 attempts per minute per IP to prevent brute forcing
+    const rateCheck = checkRateLimit(`dev-lock-${ip}`, 5, 60000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Too many failed attempts. Please wait ${Math.ceil(rateCheck.resetInMs / 1000)} seconds.` },
+        { status: 429 }
+      );
+    }
+
+    const devMasterKey = process.env.DEVELOPER_ADMIN_KEY;
+    if (!devMasterKey) {
+      console.error('DEVELOPER_ADMIN_KEY is not defined in environment variables');
+      return NextResponse.json(
+        { error: 'Server security configuration error: DEVELOPER_ADMIN_KEY is not set' },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json();
     const { devKey, expiresAt, hotelName, isManualLock, contactPhone, contactEmail, customMessage } = body;
 
-    if (devKey !== DEV_KEY) {
+    if (!devKey || devKey !== devMasterKey) {
       return NextResponse.json({ error: 'Invalid Developer Authorization Key' }, { status: 401 });
     }
 
@@ -104,11 +123,11 @@ export async function POST(req: Request) {
     };
 
     if (expiresAt) updateData.expiresAt = new Date(expiresAt).toISOString();
-    if (hotelName !== undefined) updateData.hotelName = hotelName;
+    if (hotelName !== undefined) updateData.hotelName = String(hotelName).trim().slice(0, 100);
     if (isManualLock !== undefined) updateData.isManualLock = Boolean(isManualLock);
-    if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
-    if (contactEmail !== undefined) updateData.contactEmail = contactEmail;
-    if (customMessage !== undefined) updateData.customMessage = customMessage;
+    if (contactPhone !== undefined) updateData.contactPhone = String(contactPhone).trim().slice(0, 30);
+    if (contactEmail !== undefined) updateData.contactEmail = String(contactEmail).trim().slice(0, 100);
+    if (customMessage !== undefined) updateData.customMessage = String(customMessage).trim().slice(0, 300);
 
     await collection.updateOne(
       { key: 'main_license' },
