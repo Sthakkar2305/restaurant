@@ -1,0 +1,110 @@
+import { NextResponse } from 'next/server';
+import { getCollection } from '@/lib/mongodb';
+
+const DEV_KEY = process.env.DEVELOPER_ADMIN_KEY || 'dev@1234';
+
+// Helper to get or create default license
+async function getLicenseConfig() {
+  const collection = await getCollection('system_license');
+  let license = await collection.findOne({ key: 'main_license' });
+
+  if (!license) {
+    // Default to 1 year from today
+    const defaultExpiry = new Date();
+    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+
+    const defaultDoc = {
+      key: 'main_license',
+      hotelName: 'Restaurant POS',
+      expiresAt: defaultExpiry.toISOString(),
+      isManualLock: false,
+      contactPhone: '+91 98765 43210',
+      contactEmail: 'support@pos.com',
+      customMessage: 'Your restaurant POS subscription has expired. Please contact the developer to renew your license.',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await collection.insertOne(defaultDoc);
+    license = defaultDoc;
+  }
+
+  const now = new Date();
+  const expiryDate = new Date(license.expiresAt);
+  const isExpired = license.isManualLock || now.getTime() > expiryDate.getTime();
+  const remainingMs = Math.max(0, expiryDate.getTime() - now.getTime());
+  const remainingDays = Math.ceil(remainingMs / (1000 * 60 * 60 * 24));
+
+  return {
+    hotelName: license.hotelName || 'Restaurant POS',
+    expiresAt: license.expiresAt,
+    isManualLock: Boolean(license.isManualLock),
+    isExpired,
+    remainingDays,
+    remainingMs,
+    contactPhone: license.contactPhone || '',
+    contactEmail: license.contactEmail || '',
+    customMessage: license.customMessage || '',
+  };
+}
+
+// GET: Check system license status (Public for license guard)
+export async function GET() {
+  try {
+    const license = await getLicenseConfig();
+    return NextResponse.json({ success: true, license });
+  } catch (error: any) {
+    console.error('License check error:', error);
+    return NextResponse.json({
+      success: true,
+      license: {
+        hotelName: 'Restaurant POS',
+        expiresAt: new Date(Date.now() + 365 * 86400000).toISOString(),
+        isManualLock: false,
+        isExpired: false,
+        remainingDays: 365,
+        remainingMs: 365 * 86400000,
+        contactPhone: '',
+        contactEmail: '',
+        customMessage: '',
+      }
+    });
+  }
+}
+
+// POST: Update license settings (Protected by Developer Key)
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { devKey, expiresAt, hotelName, isManualLock, contactPhone, contactEmail, customMessage } = body;
+
+    if (devKey !== DEV_KEY) {
+      return NextResponse.json({ error: 'Invalid Developer Authorization Key' }, { status: 401 });
+    }
+
+    const collection = await getCollection('system_license');
+
+    const updateData: any = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (expiresAt) updateData.expiresAt = new Date(expiresAt).toISOString();
+    if (hotelName !== undefined) updateData.hotelName = hotelName;
+    if (isManualLock !== undefined) updateData.isManualLock = Boolean(isManualLock);
+    if (contactPhone !== undefined) updateData.contactPhone = contactPhone;
+    if (contactEmail !== undefined) updateData.contactEmail = contactEmail;
+    if (customMessage !== undefined) updateData.customMessage = customMessage;
+
+    await collection.updateOne(
+      { key: 'main_license' },
+      { $set: updateData },
+      { upsert: true }
+    );
+
+    const updatedLicense = await getLicenseConfig();
+    return NextResponse.json({ success: true, license: updatedLicense });
+  } catch (error: any) {
+    console.error('License update error:', error);
+    return NextResponse.json({ error: error.message || 'Failed to update license' }, { status: 500 });
+  }
+}

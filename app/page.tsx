@@ -12,6 +12,7 @@ const WAITERS = [
 ];
 
 const ADMIN = { name: 'Admin', role: 'admin', color: 'bg-gray-800 hover:bg-gray-900', iconColor: 'text-gray-300' };
+// Super Admin is hidden from regular view, accessible via 5 rapid clicks on "POS Terminal"
 const SUPER_ADMIN = { name: 'Super Admin', role: 'superadmin', color: 'bg-red-900 hover:bg-black', iconColor: 'text-red-200' };
 
 export default function LoginPage() {
@@ -20,6 +21,9 @@ export default function LoginPage() {
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // 🚀 Secret fast-tap trigger state for Super Admin
+  const [secretClicks, setSecretClicks] = useState(0);
 
   const handleLogin = async () => {
     if (!selectedUser || !pin) return;
@@ -49,6 +53,24 @@ export default function LoginPage() {
 
   const handlePinClick = (num: number) => { if (pin.length < 4) setPin(prev => prev + num); };
 
+  // 🚀 Fast-tap trigger handler (5 rapid clicks opens Super Admin PIN pad)
+  const handleSecretTap = () => {
+    const newCount = secretClicks + 1;
+    setSecretClicks(newCount);
+
+    if (newCount >= 5) {
+      setSelectedUser(SUPER_ADMIN);
+      setPin('');
+      setError('');
+      setSecretClicks(0);
+    }
+
+    // Reset if user stops clicking after 2 seconds
+    setTimeout(() => {
+      setSecretClicks(0);
+    }, 2000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden min-h-[600px] flex">
@@ -56,7 +78,14 @@ export default function LoginPage() {
         {/* User Selection */}
         <div className={`w-full md:w-3/5 p-8 md:p-12 transition-all duration-300 ${selectedUser ? 'hidden md:block opacity-50 pointer-events-none blur-[2px]' : 'block'}`}>
           <div className="mb-10 text-center md:text-left">
-            <h1 className="text-3xl font-extrabold text-slate-800 mb-2">POS Terminal</h1>
+            {/* 🚀 Secret tap trigger on POS Terminal title */}
+            <h1
+              onClick={handleSecretTap}
+              className="text-3xl font-extrabold text-slate-800 mb-2 select-none cursor-pointer active:scale-98 transition-transform"
+              title="POS Terminal"
+            >
+              POS Terminal
+            </h1>
             <p className="text-slate-500">Select your profile to login</p>
           </div>
 
@@ -70,11 +99,8 @@ export default function LoginPage() {
           </div>
 
           <div className="flex gap-4">
-             <button onClick={() => { setSelectedUser(ADMIN); setPin(''); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 p-4 rounded-xl font-semibold flex items-center justify-center gap-3 border-2 border-slate-200 border-dashed">
+             <button onClick={() => { setSelectedUser(ADMIN); setPin(''); }} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 p-4 rounded-xl font-semibold flex items-center justify-center gap-3 border-2 border-slate-200 border-dashed transition-colors">
                 <Shield size={20} /> Manager
-             </button>
-             <button onClick={() => { setSelectedUser(SUPER_ADMIN); setPin(''); }} className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 p-4 rounded-xl font-semibold flex items-center justify-center gap-3 border-2 border-red-100 border-dashed">
-                <Crown size={20} /> Super Admin
              </button>
           </div>
         </div>
