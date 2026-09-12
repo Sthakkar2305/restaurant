@@ -73,9 +73,9 @@ async function seed() {
 
   try {
     await client.connect();
-    const db = client.db('restaurant_pos');
-
-    console.log('🧹 Clearing old data...');
+    const dbName = process.env.MONGODB_DB || 'restaurant_pos';
+    const db = client.db(dbName);
+    console.log(`🧹 Seeding database: "${dbName}"...`);
     await Promise.all([
       db.collection('users').deleteMany({}),
       db.collection('menu_items').deleteMany({}),

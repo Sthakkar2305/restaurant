@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "start": "next start",
     "test": "ts-node scripts/test-remediation.ts",
-    "seed": "ts-node scripts/seed.ts"
+    "seed": "ts-node scripts/seed.ts",
+    "provision": "ts-node scripts/provision-restaurant.ts"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "^3.893.0",

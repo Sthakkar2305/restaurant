@@ -30,6 +30,7 @@ interface OrderData {
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const token = searchParams.get('token') || '';
 
   const [order, setOrder] = useState<OrderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,7 +45,8 @@ function CheckoutContent() {
 
     const fetchOrder = async () => {
       try {
-        const res = await fetch(`/api/orders/${orderId}`);
+        const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+        const res = await fetch(`/api/orders/${orderId}${tokenQuery}`);
         const data = await res.json();
 
         if (!res.ok || !data.order) {
@@ -61,7 +63,7 @@ function CheckoutContent() {
     };
 
     fetchOrder();
-  }, [orderId]);
+  }, [orderId, token]);
 
   if (isLoading) {
     return <Loading />;

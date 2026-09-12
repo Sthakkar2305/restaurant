@@ -224,12 +224,12 @@ export default function DeveloperAdminPage() {
                 type="password"
                 value={devKey}
                 onChange={(e) => setDevKey(e.target.value)}
-                placeholder="Enter developer key (e.g. dev@1234)"
+                placeholder="Enter master developer authorization key"
                 className="w-full px-4 py-3.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
                 required
               />
               <p className="text-[11px] text-slate-500 mt-1.5">
-                Default key: <code className="text-indigo-400">dev@1234</code>
+                Requires the master <code className="text-indigo-400">DEVELOPER_ADMIN_KEY</code> configured in environment variables.
               </p>
             </div>
 

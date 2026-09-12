@@ -100,11 +100,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const devMasterKey = process.env.DEVELOPER_ADMIN_KEY;
+    const devMasterKey = process.env.DEVELOPER_ADMIN_KEY || process.env.DEVELOPER_MASTER_KEY;
     if (!devMasterKey) {
       console.error('DEVELOPER_ADMIN_KEY is not defined in environment variables');
       return NextResponse.json(
-        { error: 'Server security configuration error: DEVELOPER_ADMIN_KEY is not set' },
+        { error: 'Server security configuration error: DEVELOPER_ADMIN_KEY is not set in .env' },
         { status: 500 }
       );
     }

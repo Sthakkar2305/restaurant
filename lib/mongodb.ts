@@ -16,6 +16,8 @@ export async function ensureIndexes(db: Db) {
     await db.collection('orders').createIndex({ status: 1, createdAt: -1 });
     await db.collection('orders').createIndex({ tableNumber: 1, status: 1 });
     await db.collection('orders').createIndex({ orderId: 1 }, { unique: true });
+    await db.collection('orders').createIndex({ checkoutToken: 1 }, { sparse: true });
+    await db.collection('orders').createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true });
 
     // 3. Tables index
     await db.collection('tables').createIndex({ table_number: 1 }, { unique: true });
@@ -34,6 +36,12 @@ export async function ensureIndexes(db: Db) {
   } catch (err) {
     console.warn('Index initialization note:', err);
   }
+}
+
+// Cryptographically secure token generator for order capability links
+export function generateSecureToken(): string {
+  const crypto = require('crypto');
+  return crypto.randomBytes(32).toString('hex');
 }
 
 export async function connectToDatabase() {
