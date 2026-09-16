@@ -8,28 +8,45 @@ let indexesInitialized = false;
 export async function ensureIndexes(db: Db) {
   if (indexesInitialized) return;
   try {
-    // 1. Sessions TTL index for automatic cleanup of expired sessions
+    // Clean up any legacy idempotencyKey: null documents
+    try {
+      await db.collection('orders').updateMany(
+        { idempotencyKey: null },
+        { $unset: { idempotencyKey: '' } }
+      );
+    } catch (e) {}
+
+    // Sessions TTL index for automatic cleanup of expired sessions
     await db.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     await db.collection('sessions').createIndex({ sessionId: 1 }, { unique: true });
 
-    // 2. Orders indexing for fast retrieval & status queries
+    // Orders indexing for fast retrieval & status queries
     await db.collection('orders').createIndex({ status: 1, createdAt: -1 });
     await db.collection('orders').createIndex({ tableNumber: 1, status: 1 });
     await db.collection('orders').createIndex({ orderId: 1 }, { unique: true });
     await db.collection('orders').createIndex({ checkoutToken: 1 }, { sparse: true });
-    await db.collection('orders').createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true });
 
-    // 3. Tables index
+    try {
+      await db.collection('orders').createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true });
+    } catch (err) {
+      // If conflicting non-sparse index exists, drop and recreate
+      try {
+        await db.collection('orders').dropIndex('idempotencyKey_1');
+        await db.collection('orders').createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true });
+      } catch (e) {}
+    }
+
+    // Tables index
     await db.collection('tables').createIndex({ table_number: 1 }, { unique: true });
 
-    // 4. Users index
+    // Users index
     await db.collection('users').createIndex({ name: 1 });
     await db.collection('users').createIndex({ role: 1 });
 
-    // 5. Menu items index
+    // Menu items index
     await db.collection('menu_items').createIndex({ category: 1, available: 1 });
 
-    // 6. Inventory index
+    // Inventory index
     await db.collection('inventory_items').createIndex({ name: 1 });
 
     indexesInitialized = true;

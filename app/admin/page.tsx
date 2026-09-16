@@ -768,7 +768,7 @@ export default function AdminPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                  <Boxes className="text-indigo-400" /> Petpooja-Style Stock & Inventory Management
+                  <Boxes className="text-indigo-400" /> Stock & Inventory Management
                 </h2>
                 <p className="text-xs text-slate-400">
                   Track raw materials, flour, vegetables, water bottles, milk, dairy, oil & suppliers

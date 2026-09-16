@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
 
     const dayWiseSales = Object.values(daySalesMap).sort((a, b) => b.date.localeCompare(a.date));
 
-    // Petpooja 80 Report Catalog Definition
+    // 80 Report Catalog Definition
     const reportCatalog = [
       { id: 'daily_z_report', name: '1. Daily Day-Close Z-Report', category: 'Sales & Revenue' },
       { id: 'day_wise_sales', name: '2. Day-wise Net & Gross Sales', category: 'Sales & Revenue' },

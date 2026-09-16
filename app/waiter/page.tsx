@@ -54,25 +54,33 @@ export default function WaiterPage() {
     init();
   }, []);
 
-  const handleTableSelect = (tableId: string) => {
-      const table = tables.find(t => t._id === tableId);
-      if (!table) return;
+  const getSelectedTable = () => {
+    if (!selectedTableId) return null;
+    return tables.find((t) => t._id === selectedTableId || t.id === selectedTableId || String(t.table_number) === selectedTableId) || null;
+  };
 
-      if (table.status === 'occupied' && currentUser) {
-          if (table.currentWaiterId && table.currentWaiterId !== currentUser.userId) {
-              alert(`⛔ Access Denied!\nThis table is served by another waiter.`);
-              return;
-          }
-      }
-      setSelectedTableId(tableId);
+  const handleTableSelect = (tableId: string) => {
+    const table = tables.find((t) => t._id === tableId || t.id === tableId || String(t.table_number) === tableId);
+    if (!table) return;
+
+    const resolvedId = table._id || table.id || String(table.table_number);
+    setSelectedTableId(resolvedId);
   };
 
   const handleSendOrder = async () => {
-    if (!selectedTableId || cart.size === 0) return;
+    const table = getSelectedTable();
+    if (!table) {
+      alert('Please select a table first.');
+      return;
+    }
+    if (cart.size === 0) {
+      alert('Your cart is empty. Please add items to the order.');
+      return;
+    }
     
-    const table = tables.find(t => t._id === selectedTableId);
-    if (table?.status === 'available' && !customerName) { 
-        alert('Please enter Customer Name'); return; 
+    if (table.status === 'available' && !customerName) { 
+      alert('Please enter Customer Name');
+      return; 
     }
 
     setIsSending(true);
@@ -82,14 +90,14 @@ export default function WaiterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableNumber: table.table_number,
-          customerName, 
+          customerName: customerName || 'Dine-In Customer', 
           customerEmail,
           items: Array.from(cart.values())
         }),
       });
 
       const resData = await response.json();
-      if (!response.ok) throw new Error(resData.error || 'Failed');
+      if (!response.ok) throw new Error(resData.error || 'Failed to submit order');
 
       setCart(new Map());
       setSelectedTableId(null);
@@ -100,10 +108,13 @@ export default function WaiterPage() {
       
       const tRes = await fetch('/api/tables');
       const tData = await tRes.json();
-      setTables(tData.tables);
+      setTables(tData.tables || []);
 
-    } catch (e: any) { alert(e.message); } 
-    finally { setIsSending(false); }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const filteredItems = selectedCategory
@@ -168,7 +179,7 @@ export default function WaiterPage() {
             currentUserId={currentUser?.userId} 
           />
 
-          {selectedTableId && tables.find(t => t._id === selectedTableId)?.status === 'available' && (
+          {getSelectedTable()?.status === 'available' && (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100 flex gap-4">
                   <input 
                       type="text" 
@@ -247,7 +258,7 @@ export default function WaiterPage() {
         <div className="md:sticky md:top-24 h-fit">
            <OrderSummary 
                 items={Array.from(cart.values())} 
-                selectedTableNumber={tables.find(t => t._id === selectedTableId)?.table_number}
+                selectedTableNumber={getSelectedTable()?.table_number}
                 onRemoveItem={(id) => { const n = new Map(cart); n.delete(id); setCart(n); }}
                 onUpdateNotes={handleUpdateNotes}
                 onSendOrder={handleSendOrder}

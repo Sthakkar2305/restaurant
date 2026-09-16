@@ -94,96 +94,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 4. 🛡️ ATOMIC TABLE LOCKING & CONCURRENCY CONTROL
-    // Try to atomically acquire table lock from 'available' -> 'occupied'
-    const lockResult = await tablesCollection.findOneAndUpdate(
-      { table_number: tNum, status: 'available' },
-      {
-        $set: {
-          status: 'occupied',
-          currentWaiterId: auth.user.userId,
-          updatedAt: new Date(),
-        },
-      },
-      { returnDocument: 'after' }
-    );
-
-    // If lock was acquired: this request is the unique creator of the active order for this table
-    if (lockResult) {
-      const subtotal = validatedItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-      const tax = Math.round(subtotal * 0.05 * 100) / 100;
-      const serviceCharge = Math.round(subtotal * 0.1 * 100) / 100;
-      const total = Math.round(subtotal + tax + serviceCharge);
-
-      const orderId = generateId();
-      const checkoutToken = generateSecureToken();
-
-      const newOrder = {
-        orderId,
-        checkoutToken,
-        tableNumber: tNum,
-        waiterId: auth.user.userId,
-        waiterName: auth.user.name,
-        customerName: customerName ? String(customerName).trim().slice(0, 100) : 'Guest',
-        customerEmail: customerEmail ? String(customerEmail).trim().slice(0, 100) : '',
-        items: validatedItems,
-        status: 'pending',
-        subtotal,
-        tax,
-        serviceCharge,
-        discount: 0,
-        total,
-        paymentStatus: 'unpaid',
-        idempotencyKey: idempotencyKey || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await ordersCollection.insertOne(newOrder);
-
-      return NextResponse.json({
-        success: true,
-        orderId: newOrder.orderId,
-        checkoutToken: newOrder.checkoutToken,
-      });
-    }
-
-    // If table is ALREADY occupied: Find existing active order and append items
-    let existingOrder = await ordersCollection.findOne({
+    // 4. 🛡️ ATOMIC TABLE STATE & ACTIVE ORDER HANDLING
+    // Check if there is an ACTIVE (unpaid/uncancelled) order currently on this table
+    let existingActiveOrder = await ordersCollection.findOne({
       tableNumber: tNum,
       status: { $in: ['pending', 'preparing', 'served'] },
     });
 
-    // In a brief race while the creator request is inserting, retry once after 50ms
-    if (!existingOrder) {
-      await new Promise((res) => setTimeout(res, 50));
-      existingOrder = await ordersCollection.findOne({
-        tableNumber: tNum,
-        status: { $in: ['pending', 'preparing', 'served'] },
-      });
-    }
-
-    if (existingOrder) {
-      if (
-        existingOrder.waiterId !== auth.user.userId &&
-        auth.user.role !== 'admin' &&
-        auth.user.role !== 'superadmin'
-      ) {
-        return NextResponse.json(
-          { error: `Table is occupied and served by ${existingOrder.waiterName || 'another waiter'}` },
-          { status: 403 }
-        );
-      }
-
-      const updatedItems = [...(existingOrder.items || []), ...validatedItems];
+    // -------------------------------------------------------------
+    // CASE A: Table has an existing active order -> Append items
+    // -------------------------------------------------------------
+    if (existingActiveOrder) {
+      const updatedItems = [...(existingActiveOrder.items || []), ...validatedItems];
       const subtotal = updatedItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
       const tax = Math.round(subtotal * 0.05 * 100) / 100;
       const serviceCharge = Math.round(subtotal * 0.1 * 100) / 100;
-      const discount = Number(existingOrder.discount) || 0;
+      const discount = Number(existingActiveOrder.discount) || 0;
       const total = Math.max(0, Math.round(subtotal + tax + serviceCharge - discount));
 
       await ordersCollection.updateOne(
-        { _id: existingOrder._id },
+        { _id: existingActiveOrder._id },
         {
           $set: {
             items: updatedItems,
@@ -199,12 +129,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'Order updated with additional items',
-        orderId: existingOrder.orderId,
-        checkoutToken: existingOrder.checkoutToken,
+        orderId: existingActiveOrder.orderId,
+        checkoutToken: existingActiveOrder.checkoutToken,
       });
     }
 
-    // Fallback if table document was missing
+    // -------------------------------------------------------------
+    // CASE B: No active order on this table -> Create NEW order & occupy table
+    // -------------------------------------------------------------
     const subtotal = validatedItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
     const tax = Math.round(subtotal * 0.05 * 100) / 100;
     const serviceCharge = Math.round(subtotal * 0.1 * 100) / 100;
@@ -213,7 +145,7 @@ export async function POST(request: NextRequest) {
     const orderId = generateId();
     const checkoutToken = generateSecureToken();
 
-    const fallbackOrder = {
+    const newOrder: any = {
       orderId,
       checkoutToken,
       tableNumber: tNum,
@@ -229,23 +161,43 @@ export async function POST(request: NextRequest) {
       discount: 0,
       total,
       paymentStatus: 'unpaid',
-      idempotencyKey: idempotencyKey || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    await ordersCollection.insertOne(fallbackOrder);
-    await tablesCollection.updateOne(
-      { table_number: tNum },
-      { $set: { status: 'occupied', currentWaiterId: auth.user.userId, updatedAt: new Date() } },
-      { upsert: true }
-    );
+    // Only attach idempotencyKey if it is a non-empty string (prevents null duplicate key collisions)
+    if (idempotencyKey && typeof idempotencyKey === 'string' && idempotencyKey.trim()) {
+      newOrder.idempotencyKey = idempotencyKey.trim();
+    }
 
-    return NextResponse.json({
-      success: true,
-      orderId: fallbackOrder.orderId,
-      checkoutToken: fallbackOrder.checkoutToken,
-    });
+    try {
+      await ordersCollection.insertOne(newOrder);
+
+      // Set table status to occupied by current waiter
+      await tablesCollection.updateOne(
+        { table_number: tNum },
+        {
+          $set: {
+            status: 'occupied',
+            currentWaiterId: auth.user.userId,
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+
+      return NextResponse.json({
+        success: true,
+        orderId: newOrder.orderId,
+        checkoutToken: newOrder.checkoutToken,
+      });
+    } catch (insertErr: any) {
+      console.error('Order insert error, rolling back table state:', insertErr);
+      return NextResponse.json(
+        { error: insertErr.message || 'Failed to record order' },
+        { status: 500 }
+      );
+    }
   } catch (error: any) {
     console.error('Order creation error:', error);
     return NextResponse.json({ error: error.message || 'Server error creating order' }, { status: 500 });

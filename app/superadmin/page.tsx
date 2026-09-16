@@ -374,7 +374,7 @@ export default function SuperAdminPage() {
   };
 
   // -------------------------------------------------------------
-  // PETPOOJA 80 REPORTS EXPORT (EXCEL / CSV)
+  // 80 REPORTS EXPORT (EXCEL / CSV)
   // -------------------------------------------------------------
   const exportReportToExcel = () => {
     if (!reportData) return;
@@ -383,7 +383,7 @@ export default function SuperAdminPage() {
 
     // Sheet 1: Executive KPI Summary
     const summaryRows = [
-      ['PETPOOJA STYLE EXECUTIVE RESTAURANT REPORT'],
+      ['80 REPORTS EXECUTIVE RESTAURANT REPORT'],
       ['Report Period', reportRange.toUpperCase()],
       ['Generated At', new Date().toLocaleString()],
       [],
@@ -468,7 +468,7 @@ export default function SuperAdminPage() {
       XLSX.utils.book_append_sheet(wb, wsOrders, 'All Orders Ledger');
     }
 
-    XLSX.writeFile(wb, `Petpooja_Restaurant_Report_${reportRange}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `Restaurant_80_Reports_${reportRange}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     showAlert('success', 'Excel Report downloaded successfully!');
   };
 
@@ -499,7 +499,7 @@ export default function SuperAdminPage() {
     return o.status === orderStatusFilter;
   });
 
-  // Filter Petpooja catalog
+  // Filter 80 reports catalog
   const filteredReportCatalog = (reportData?.catalog || []).filter((r: any) => {
     const matchesCat = reportCategoryFilter === 'All' || r.category === reportCategoryFilter;
     const matchesSearch =
@@ -534,7 +534,7 @@ export default function SuperAdminPage() {
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
               Super Admin Center <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">MASTER</span>
             </h1>
-            <p className="text-xs text-slate-400">Manage Staff Roles, Menu, Tables, Orders & Petpooja 80 Reports</p>
+            <p className="text-xs text-slate-400">Manage Staff Roles, Menu, Tables, Orders & 80 Reports</p>
           </div>
         </div>
 
@@ -615,13 +615,13 @@ export default function SuperAdminPage() {
 
         <button
           onClick={() => setActiveTab('reports')}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition ${
             activeTab === 'reports'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
               : 'text-indigo-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          <FileBarChart size={16} /> Petpooja 80 Reports
+          <FileBarChart size={16} /> 80 Reports
         </button>
       </div>
 
@@ -1019,7 +1019,7 @@ export default function SuperAdminPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 5: PETPOOJA 80 REPORTS & ANALYTICS SUITE */}
+        {/* TAB 5: 80 REPORTS & ANALYTICS SUITE */}
         {/* ========================================================================= */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
@@ -1027,7 +1027,7 @@ export default function SuperAdminPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
               <div>
                 <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                  <FileBarChart className="text-indigo-400" /> Petpooja 80 Reports & Analytics Suite
+                  <FileBarChart className="text-indigo-400" /> 80 Reports & Analytics Suite
                 </h2>
                 <p className="text-xs text-slate-400">
                   Comprehensive reporting engine for Sales, Dishes, Staff SLA, Taxes & End-of-Day Z-Reports
@@ -1121,7 +1121,7 @@ export default function SuperAdminPage() {
               </div>
             )}
 
-            {/* Petpooja 80 Reports Catalog Browser */}
+            {/* 80 Reports Catalog Browser */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Left Column: 80 Reports Index & Search */}
               <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-3xl p-4 flex flex-col max-h-[680px]">
